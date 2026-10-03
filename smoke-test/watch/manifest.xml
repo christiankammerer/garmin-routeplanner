@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- Throwaway smoke-test app. Not the real watch app. -->
+<iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
+    <iq:application id="6326862b9242768809312e69fd68aa1a" type="watch-app" name="@Strings.AppName" entry="SmokeApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="5.0.0">
+        <iq:products>
+            <iq:product id="vivoactive5"/>
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="Communications"/>
+        </iq:permissions>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+        <iq:barrels/>
+    </iq:application>
+</iq:manifest>
