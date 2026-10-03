@@ -13,7 +13,7 @@ The length the runner wants the route to be; a generated route may deviate from 
 _Avoid_: Length, goal
 
 **Route preference**:
-A wished-for characteristic of a route (soft surface, scenic, low traffic, low incline), expressed as a strength rather than a hard rule.
+A wished-for characteristic of a route (soft surface, scenic, low traffic, low incline) that the runner switches on or off; when on, it steers route generation without ruling any way out.
 _Avoid_: Characteristic, filter, constraint
 
 **Scenic**:
@@ -39,6 +39,10 @@ _Avoid_: One-way route, A-to-B
 **Candidate route**:
 One of the few routes generated for a single route request, from which the runner picks one.
 _Avoid_: Option, suggestion, alternative
+
+**Saved place**:
+A named location the runner kept in the phone app to use as a start or end point.
+_Avoid_: Favourite, bookmark, location
 
 **Saved route**:
 A route the runner kept in the phone app to run again.
