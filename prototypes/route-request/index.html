@@ -1,0 +1,484 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Answers wayfinder ticket #10
+  "Prototype the route request screen and candidate-route picker".
+
+  Three structurally different variants of the phone flow
+  (route request → candidate routes → send to watch), switchable via ?variant=A|B|C
+  and the floating bar at the bottom (or ← / → keys).
+
+  Everything is fake: routes are generated shapes, not BRouter output; "send to watch"
+  is a timer. The map is real (MapLibre GL JS + OpenFreeMap), standing in for MapLibre Compose.
+  The panel on the right shows the full app state and lets you force edge cases.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PROTOTYPE · Route request</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+  :root { --primary:#0b57d0; --on:#fff; --surface:#fff; --muted:#5f6368; --line:#dadce0; --amber:#b06000; --amberbg:#fef7e0; --ok:#188038; --err:#c5221f; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#e8eaed; font-family:Roboto, system-ui, sans-serif; color:#1f1f1f; display:flex; gap:24px; justify-content:center; align-items:flex-start; padding:24px 16px 90px; }
+  .phone { width:400px; height:840px; border:10px solid #111; border-radius:40px; overflow:hidden; position:relative; background:var(--surface); flex:none; }
+  .debug { width:340px; font:11px/1.4 ui-monospace, monospace; background:#fff; border-radius:12px; padding:12px; max-height:840px; overflow:auto; }
+  .debug h3 { font:600 12px Roboto, sans-serif; margin:0 0 6px; }
+  .debug pre { white-space:pre-wrap; margin:0; }
+  .debug select, .debug button { font:12px Roboto, sans-serif; margin:2px 0 10px; }
+  @media (max-width:800px){ body{padding:0 0 70px; display:block} .phone{width:100vw;height:calc(100vh - 60px);border:0;border-radius:0} .debug{width:auto;margin:12px;max-height:none} }
+
+  .switcher { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#202124; color:#fff; border-radius:999px; padding:6px 8px; display:flex; align-items:center; gap:8px; box-shadow:0 4px 16px rgba(0,0,0,.35); z-index:1000; font:600 13px Roboto, sans-serif; }
+  .switcher button { background:#3c4043; color:#fff; border:0; border-radius:50%; width:30px; height:30px; cursor:pointer; font-size:15px; }
+  .switcher span { min-width:220px; text-align:center; }
+
+  .fill { position:absolute; inset:0; }
+  .btn { border:0; border-radius:20px; padding:10px 18px; font:500 14px Roboto, sans-serif; cursor:pointer; background:#e8f0fe; color:var(--primary); }
+  .btn.primary { background:var(--primary); color:var(--on); }
+  .btn.wide { width:100%; padding:14px; font-size:15px; }
+  .btn.text { background:none; padding:8px; }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .icon { width:40px; height:40px; border-radius:50%; border:1px solid var(--line); background:#fff; font-size:20px; cursor:pointer; }
+  .chip { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:6px 12px; font-size:13px; background:#fff; cursor:pointer; white-space:nowrap; }
+  .chip.on { background:#d3e3fd; border-color:#d3e3fd; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .muted { color:var(--muted); font-size:13px; }
+  .row { display:flex; align-items:center; gap:12px; }
+  .between { justify-content:space-between; }
+  .center { text-align:center; }
+  .label { font:500 13px Roboto, sans-serif; margin:14px 0 8px; }
+  .dots { letter-spacing:-1px; color:var(--primary); }
+  .flag { background:var(--amberbg); color:var(--amber); border-radius:6px; padding:3px 8px; font-size:12px; display:inline-block; }
+  .sheet { position:absolute; left:0; right:0; bottom:0; background:#fff; border-radius:24px 24px 0 0; box-shadow:0 -2px 12px rgba(0,0,0,.15); padding:8px 16px 16px; }
+  .grab { width:32px; height:4px; background:var(--line); border-radius:2px; margin:4px auto 10px; }
+  .banner { position:absolute; top:70px; left:16px; right:16px; background:#202124; color:#fff; padding:10px 14px; border-radius:8px; font-size:13px; }
+  .card { border:1px solid var(--line); border-radius:12px; padding:12px; background:#fff; cursor:pointer; }
+  .skeleton { background:linear-gradient(90deg,#f1f3f4 25%,#e8eaed 50%,#f1f3f4 75%); background-size:200% 100%; animation:sh 1.2s infinite; border-radius:12px; }
+  @keyframes sh { to { background-position:-200% 0; } }
+  .progress { height:4px; background:#e8eaed; border-radius:2px; overflow:hidden; }
+  .progress > div { height:100%; background:var(--primary); transition:width .4s; }
+  .sendstate { font-size:13px; margin-top:8px; text-align:center; }
+  .sendstate.sent { color:var(--ok); } .sendstate.failed { color:var(--err); }
+  .menu { position:absolute; background:#fff; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.25); padding:6px 0; z-index:5; min-width:240px; }
+  .menu div { padding:10px 16px; cursor:pointer; font-size:14px; } .menu div:hover { background:#f1f3f4; }
+  .menu hr { border:0; border-top:1px solid var(--line); margin:4px 0; }
+  .appbar { height:56px; display:flex; align-items:center; gap:8px; padding:0 8px; font:500 18px Roboto, sans-serif; border-bottom:1px solid #f1f3f4; }
+  .meter { height:6px; background:#e8eaed; border-radius:3px; } .meter > div { height:100%; border-radius:3px; background:var(--ok); }
+  .seg { display:flex; border:1px solid var(--line); border-radius:18px; overflow:hidden; } .seg button { flex:1; border:0; background:#fff; padding:7px 4px; font-size:12px; cursor:pointer; } .seg button.on { background:#d3e3fd; font-weight:600; }
+  .maplibregl-ctrl-attrib { font-size:9px; }
+</style>
+</head>
+<body>
+<div class="phone" id="phone"></div>
+<div class="debug" id="debug"></div>
+<div class="switcher" id="switcher"></div>
+
+<script>
+// ---------------------------------------------------------------- shared fake world
+const COLORS = ['#1a73e8', '#e8710a', '#a142f4'];
+const PREFS = [
+  { k:'soft',    label:'Soft surface', icon:'🌲', desc:'Gravel, dirt and forest paths over asphalt' },
+  { k:'scenic',  label:'Scenic',       icon:'🏞️', desc:'Forest, parks and water, away from loud roads' },
+  { k:'traffic', label:'Low traffic',  icon:'🚸', desc:'Small, slow roads and paths' },
+  { k:'incline', label:'Low incline',  icon:'📉', desc:'Avoid climbs' },
+];
+const STRENGTH = ['Off', 'Light', 'Medium', 'Strong'];
+const PLACES = [
+  { label:'Home',          p:[18.0716, 59.3149] },
+  { label:'Office',        p:[18.0649, 59.3326] },
+  { label:'Hellasgården',  p:[18.2216, 59.2887] },
+];
+const GPS = { label:'Current location', p:[18.0950, 59.3060], gps:true };
+
+const S = {
+  request: { start:{...GPS}, end:null, km:10, prefs:{ soft:0, scenic:2, traffic:1, incline:0 } },
+  gen: { status:'idle', expected:3, startedAt:null },   // idle | running | done
+  candidates: [],
+  selected: null,
+  send: { status:'idle', msg:'' },                        // idle | sending | sent | failed
+  scenario: 'normal',
+};
+
+let currentVariant = null;
+function update() { renderDebug(); currentVariant && currentVariant.render(); }
+
+// geo helpers ([lon,lat])
+const rad = d => d * Math.PI / 180;
+function hav(a, b) { const dLat = rad(b[1]-a[1]), dLon = rad(b[0]-a[0]); const h = Math.sin(dLat/2)**2 + Math.cos(rad(a[1]))*Math.cos(rad(b[1]))*Math.sin(dLon/2)**2; return 12742 * Math.asin(Math.sqrt(h)); }
+const lineLen = pts => pts.reduce((s, p, i) => i ? s + hav(pts[i-1], p) : 0, 0);
+const off = (p, dx, dy) => [p[0] + dx / (111.32 * Math.cos(rad(p[1]))), p[1] + dy / 110.57];
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function scaleAbout(origin, pts, k) { return pts.map(p => [origin[0] + (p[0]-origin[0])*k, origin[1] + (p[1]-origin[1])*k]); }
+const COMPASS = ['east','north-east','north','north-west','west','south-west','south','south-east'];
+
+function fakeLoop(start, km, dir, r) {
+  const rad0 = km / (2*Math.PI), c = off(start, rad0*Math.cos(dir), rad0*Math.sin(dir));
+  const a2 = .15*r(), a3 = .1*r(), p2 = 6*r(), p3 = 6*r(), N = 90, pts = [];
+  for (let i = 0; i <= N; i++) {
+    const th = dir + Math.PI + i*2*Math.PI/N;
+    const rr = rad0 * (1 + a2*Math.sin(2*th+p2) + a3*Math.sin(3*th+p3) + .03*(r()-.5));
+    pts.push(off(c, rr*Math.cos(th), rr*Math.sin(th)));
+  }
+  pts[0] = start; pts[N] = start;
+  return pts;
+}
+function fakeP2P(start, end, km, side, r) {
+  const build = h => { const pts = []; for (let i = 0; i <= 60; i++) { const t = i/60, bx = start[0]+(end[0]-start[0])*t, by = start[1]+(end[1]-start[1])*t;
+    const nx = -(end[1]-start[1]), ny = (end[0]-start[0]); const bulge = side*h*Math.sin(Math.PI*t) + .0006*Math.sin(t*23+side);
+    pts.push([bx + nx*bulge, by + ny*bulge]); } return pts; };
+  let lo = 0, hi = 3; for (let k = 0; k < 30; k++) { const m = (lo+hi)/2; lineLen(build(m)) < km ? lo = m : hi = m; }
+  return build(lo);
+}
+function makeCandidate(i, req, offTol) {
+  const r = rng(Date.now() + i*7919);
+  const factor = offTol ? 1.09 + .05*r() : 0.965 + .07*r();
+  const target = req.km * factor;
+  const dir = (i * 2*Math.PI/3) + r()*.8;
+  let pts = req.end ? fakeP2P(req.start.p, req.end.p, target, i%2 ? 1 : -1, r) : fakeLoop(req.start.p, req.km, dir, r);
+  if (!req.end) pts = scaleAbout(req.start.p, pts, target / lineLen(pts));
+  const km = lineLen(pts), pr = req.prefs;
+  const ascent = Math.round((60 + 140*r()) * (1 - .22*pr.incline) * km/10);
+  const profile = []; let h = 20; for (let j = 0; j < 40; j++) { h += (r()-.5) * ascent/12; h = Math.max(0, h); profile.push(h); }
+  const minDist = req.end ? hav(req.start.p, req.end.p) : 0;
+  return {
+    id:'R' + (i+1), color:COLORS[i], pts, km, ascent, profile,
+    heading: req.end ? (i%2 ? 'left of the direct line' : 'right of the direct line') : 'heads ' + COMPASS[Math.round(((dir % (2*Math.PI)) / (Math.PI/4))) % 8],
+    match: { soft:Math.min(95, Math.round(20 + 18*pr.soft + 15*r())), scenic:Math.min(95, Math.round(30 + 15*pr.scenic + 15*r())), traffic:Math.min(98, Math.round(45 + 15*pr.traffic + 10*r())), incline:Math.round(100 - ascent/km*2) },
+    offTolerance: offTol,
+    note: offTol ? (req.end && req.km < minDist ? 'Shortest possible' : 'Closest we found') : null,
+  };
+}
+
+let genTimers = [];
+function startGenerate() {
+  genTimers.forEach(clearTimeout); genTimers = [];
+  const sc = S.scenario, req = S.request;
+  const times = sc === 'slow' ? [7000, 13000, 19500] : [2200, 5000, 8500];
+  const n = sc === 'onlyTwo' ? 2 : 3;
+  S.candidates = []; S.selected = null; S.send = { status:'idle', msg:'' };
+  S.gen = { status:'running', expected:n, startedAt:Date.now() };
+  const forceOff = req.end && req.km < hav(req.start.p, req.end.p);
+  for (let i = 0; i < n; i++) genTimers.push(setTimeout(() => {
+    S.candidates.push(makeCandidate(i, req, forceOff || (sc === 'offTol' && i === 2) || sc === 'allOff'));
+    if (S.selected === null) S.selected = 0;
+    if (i === n-1) S.gen.status = 'done';
+    update();
+  }, times[i]));
+  if (n < 3) genTimers.push(setTimeout(() => update(), times[2]));
+  update();
+}
+function cancelGenerate() { genTimers.forEach(clearTimeout); genTimers = []; S.gen.status = S.candidates.length ? 'done' : 'idle'; update(); }
+
+let sendTimer;
+function sendToWatch() {
+  clearTimeout(sendTimer);
+  S.send = { status:'sending', msg:'Sending to Vivoactive 5…' }; update();
+  sendTimer = setTimeout(() => {
+    S.send = S.scenario === 'watchFail'
+      ? { status:'failed', msg:'Watch didn’t confirm. Is it nearby, and is Garmin Connect running on the phone?' }
+      : { status:'sent', msg:'On your watch ✓ Open Route Runner on the Vivoactive and press Start.' };
+    update();
+  }, 1800);
+}
+function selectCand(i) { S.selected = i; if (S.send.status !== 'sending') S.send = { status:'idle', msg:'' }; update(); }
+function setPoint(which, place) { S.request[which] = place ? { ...place } : null; update(); }
+
+// formatting
+const fmtKm = km => km.toFixed(1) + ' km';
+function tolText() { const k = S.request.km; return `aim ${(k*.95).toFixed(1)}–${(k*1.05).toFixed(1)} km`; }
+function devText(c) { const d = (c.km / S.request.km - 1) * 100; return (d >= 0 ? '+' : '') + d.toFixed(0) + '%'; }
+function elevSvg(c, w, h) { const m = Math.max(...c.profile, 1); const pts = c.profile.map((v, i) => `${(i/(c.profile.length-1)*w).toFixed(1)},${(h - v/m*(h-4) - 2).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}"><polyline points="0,${h} ${pts} ${w},${h}" fill="${c.color}22" stroke="${c.color}" stroke-width="1.5"/></svg>`; }
+function thumbSvg(c, s) { const xs = c.pts.map(p => p[0]), ys = c.pts.map(p => p[1]); const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const k = (s-12) / Math.max((x1-x0) * Math.cos(rad(y0)), y1-y0); const pts = c.pts.map(p => `${(6 + (p[0]-x0)*Math.cos(rad(y0))*k).toFixed(1)},${(s - 6 - (p[1]-y0)*k).toFixed(1)}`).join(' ');
+  return `<svg width="${s}" height="${s}" style="background:#f1f8e9;border-radius:8px;flex:none"><polyline points="${pts}" fill="none" stroke="${c.color}" stroke-width="2.5" stroke-linejoin="round"/></svg>`; }
+const dots = n => '•'.repeat(n);
+const activePrefs = () => PREFS.filter(p => S.request.prefs[p.k] > 0);
+function sendStateHtml() { return S.send.status === 'idle' ? '' : `<div class="sendstate ${S.send.status}">${S.send.msg}</div>`; }
+function sendBtnLabel() { return { idle:'Send to watch', sending:'Sending…', sent:'Send again', failed:'Retry' }[S.send.status]; }
+
+// ---------------------------------------------------------------- map helpers
+let liveMaps = [];
+function makeMap(el, opts = {}) {
+  const map = new maplibregl.Map({ container:el, style:'https://tiles.openfreemap.org/styles/liberty', center:S.request.start.p, zoom:opts.zoom ?? 12.3, attributionControl:{ compact:true }, interactive:opts.interactive ?? true });
+  liveMaps.push(map);
+  map.on('load', () => {
+    map.addSource('routes', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
+    map.addLayer({ id:'routes-casing', type:'line', source:'routes', layout:{ 'line-join':'round', 'line-cap':'round', 'line-sort-key':['get','sel'] }, paint:{ 'line-color':'#fff', 'line-width':['case',['==',['get','sel'],1],10,6] } });
+    map.addLayer({ id:'routes', type:'line', source:'routes', layout:{ 'line-join':'round', 'line-cap':'round', 'line-sort-key':['get','sel'] }, paint:{ 'line-color':['get','color'], 'line-width':['case',['==',['get','sel'],1],6,3.5], 'line-opacity':['case',['==',['get','sel'],1],1,.7] } });
+    map.on('click', 'routes', e => { e.routeHit = true; map._onRoute && map._onRoute(e.features[0].properties.i); });
+    map._ready = true; (map._queue || []).forEach(f => f()); map._queue = [];
+  });
+  map._markers = {};
+  return map;
+}
+function whenReady(map, f) { map._ready ? f() : (map._queue = map._queue || []).push(f); }
+function setRoutes(map, cands, sel, dimOthers) {
+  whenReady(map, () => map.getSource('routes').setData({ type:'FeatureCollection', features:cands.map((c, i) => ({ type:'Feature',
+    properties:{ i, sel:i === sel ? 1 : 0, color:dimOthers && i !== sel ? '#9aa0a6' : c.color }, geometry:{ type:'LineString', coordinates:c.pts } })) }));
+}
+function setMarkers(map) {
+  const m = map._markers, req = S.request;
+  const put = (k, p, html) => { if (!p) { m[k] && m[k].remove(); delete m[k]; return; }
+    if (!m[k]) { const el = document.createElement('div'); el.innerHTML = html; m[k] = new maplibregl.Marker({ element:el }).setLngLat(p).addTo(map); } else m[k].setLngLat(p); };
+  put('start', req.start.p, `<div style="width:18px;height:18px;border-radius:50%;background:${req.start.gps ? '#1a73e8' : '#188038'};border:3px solid #fff;box-shadow:0 0 0 1px #0004"></div>`);
+  put('end', req.end && req.end.p, `<div style="font-size:22px;transform:translate(6px,-12px)">🏁</div>`);
+}
+function fit(map, pts, pad) { if (!pts.length) return; const b = pts.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(pts[0], pts[0])); map.fitBounds(b, { padding:pad, duration:500, maxZoom:15 }); }
+function killMaps() { liveMaps.forEach(m => m.remove()); liveMaps = []; }
+
+// ---------------------------------------------------------------- Variant A: map-first, bottom sheet
+const VariantA = { key:'A', name:'Map + bottom sheet', mount(root) {
+  root.innerHTML = `<div class="fill" id="a-map"></div><div id="a-top"></div><div id="a-banner"></div><div class="sheet" id="a-sheet"></div><div id="a-menu"></div>`;
+  const map = makeMap(root.querySelector('#a-map'));
+  const ui = { mode: S.candidates.length ? 'results' : 'request', pick:null, menu:null, lastCount:-1, lastSel:-1 };
+  map.on('click', e => { if (e.routeHit) return; if (ui.pick) { setPoint(ui.pick, { label:'Dropped pin', p:[e.lngLat.lng, e.lngLat.lat] }); ui.pick = null; update(); } });
+  map._onRoute = i => ui.mode === 'results' && selectCand(i);
+  root.onclick = e => {
+    const t = e.target.closest('[data-act]'); if (!t) { if (ui.menu && !e.target.closest('.menu')) { ui.menu = null; this.render(); } return; }
+    const a = t.dataset.act, arg = t.dataset.arg;
+    if (a === 'menu') ui.menu = ui.menu === arg ? null : arg;
+    if (a === 'place') { const [which, idx] = arg.split(':'); ui.menu = null;
+      if (idx === 'pick') ui.pick = which; else if (idx === 'gps') setPoint(which, GPS); else if (idx === 'loop') setPoint('end', null); else setPoint(which, PLACES[+idx]); map.flyTo({ center:S.request.start.p }); }
+    if (a === 'dist') S.request.km = Math.max(1, Math.min(50, S.request.km + +arg));
+    if (a === 'distSet') S.request.km = +arg;
+    if (a === 'pref') S.request.prefs[arg] = (S.request.prefs[arg] + 1) % 4;
+    if (a === 'go') { ui.mode = 'results'; ui.lastCount = -1; startGenerate(); }
+    if (a === 'edit') { ui.mode = 'request'; cancelGenerate(); S.candidates = []; S.selected = null; }
+    if (a === 'sel') selectCand(+arg);
+    if (a === 'send') sendToWatch();
+    if (a === 'cancelPick') ui.pick = null;
+    update();
+  };
+  this.render = () => {
+    const req = S.request;
+    const pill = (which, icon, text) => `<button class="chip" style="box-shadow:0 1px 4px #0003;border:0;padding:10px 14px;font-size:14px;max-width:100%" data-act="menu" data-arg="${which}" ${ui.mode === 'results' ? 'disabled' : ''}>${icon} ${text} ▾</button>`;
+    root.querySelector('#a-top').innerHTML = `<div style="position:absolute;top:12px;left:12px;right:12px;display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+      ${pill('start', '📍', 'Start: ' + req.start.label)}${pill('end', '🏁', req.end ? 'Finish: ' + req.end.label : 'Finish: back at start (loop)')}</div>`;
+    root.querySelector('#a-banner').innerHTML = ui.pick ? `<div class="banner" style="top:112px">Tap the map to set the ${ui.pick === 'start' ? 'start' : 'finish'} · <a href="#" data-act="cancelPick" style="color:#8ab4f8">Cancel</a></div>` : '';
+    root.querySelector('#a-menu').innerHTML = ui.menu ? `<div class="menu" style="top:${ui.menu === 'start' ? 56 : 100}px;left:12px">
+      ${ui.menu === 'end' ? `<div data-act="place" data-arg="end:loop">↺ Back at start (loop)</div><hr>` : ''}
+      <div data-act="place" data-arg="${ui.menu}:gps">◎ Current location</div>
+      ${PLACES.map((p, i) => `<div data-act="place" data-arg="${ui.menu}:${i}">★ ${p.label}</div>`).join('')}
+      <hr><div data-act="place" data-arg="${ui.menu}:pick">✚ Pick on map</div></div>` : '';
+    const sheet = root.querySelector('#a-sheet');
+    if (ui.mode === 'request') {
+      sheet.innerHTML = `<div class="grab"></div>
+        <div class="row between"><button class="icon" data-act="dist" data-arg="-0.5">−</button>
+          <div class="center"><div style="font:500 34px Roboto">${req.km.toFixed(1)} km</div><div class="muted">${tolText()} · ${req.end ? 'point-to-point' : 'loop'}</div></div>
+          <button class="icon" data-act="dist" data-arg="0.5">+</button></div>
+        <div class="chips" style="justify-content:center;margin-top:10px">${[5, 8, 10, 15, 21.1].map(k => `<span class="chip ${req.km === k ? 'on' : ''}" data-act="distSet" data-arg="${k}">${k}</span>`).join('')}</div>
+        <div class="label">Preferences <span class="muted">· tap to strengthen</span></div>
+        <div class="chips">${PREFS.map(p => `<span class="chip ${req.prefs[p.k] ? 'on' : ''}" data-act="pref" data-arg="${p.k}">${p.icon} ${p.label} <span class="dots">${dots(req.prefs[p.k])}</span></span>`).join('')}</div>
+        <button class="btn primary wide" style="margin-top:16px" data-act="go">Find routes</button>`;
+      setRoutes(map, [], null);
+    } else {
+      const n = S.gen.expected, have = S.candidates.length, running = S.gen.status === 'running';
+      const allOff = have && S.candidates.every(c => c.offTolerance);
+      const card = (c, i) => `<div class="card" data-act="sel" data-arg="${i}" style="flex:none;width:150px;${S.selected === i ? `border:2px solid ${c.color}` : ''}">
+          <div class="row between"><b style="color:${c.color}">${c.id}</b>${c.offTolerance ? `<span class="flag">${devText(c)}</span>` : `<span class="muted">${devText(c)}</span>`}</div>
+          <div style="font:500 22px Roboto;margin:4px 0">${fmtKm(c.km)}</div>
+          <div class="muted">↗ ${c.ascent} m · ${c.heading}</div>${elevSvg(c, 126, 28)}</div>`;
+      sheet.innerHTML = `<div class="grab"></div>
+        <div class="row between"><button class="btn text" data-act="edit">← Edit request</button><span class="muted">${fmtKm(req.km)} · ${activePrefs().map(p => p.icon).join(' ') || 'no prefs'}</span></div>
+        ${running ? `<div class="muted" style="margin:4px 0">Finding routes… ${have} of ${n}</div><div class="progress"><div style="width:${(have + .4) / n * 100}%"></div></div>` : ''}
+        ${!running && have < 3 ? `<div class="muted" style="margin:4px 0">Only ${have} route${have === 1 ? '' : 's'} found for this request.</div>` : ''}
+        ${allOff && !running ? `<div class="flag" style="margin:6px 0">No route within ±5%. Showing the closest we found.</div>` : ''}
+        <div style="display:flex;gap:10px;overflow-x:auto;padding:10px 0">${S.candidates.map(card).join('')}${running ? Array.from({ length:n - have }, () => `<div class="skeleton" style="flex:none;width:150px;height:118px"></div>`).join('') : ''}</div>
+        <button class="btn primary wide" data-act="send" ${S.selected === null || S.send.status === 'sending' ? 'disabled' : ''}>⌚ ${sendBtnLabel()}${S.selected !== null ? ' · ' + S.candidates[S.selected].id : ''}</button>${sendStateHtml()}`;
+      setRoutes(map, S.candidates, S.selected);
+      if (have !== ui.lastCount) { ui.lastCount = have; fit(map, S.candidates.flatMap(c => c.pts).concat([req.start.p]), { top:110, bottom:330, left:30, right:30 }); }
+    }
+    setMarkers(map);
+  };
+  this.render();
+} };
+
+// ---------------------------------------------------------------- Variant B: step-by-step form, list of results, detail page
+const VariantB = { key:'B', name:'Step wizard + result list', mount(root) {
+  const ui = { screen: S.candidates.length ? 'results' : 'start', picking:null, built:null, map:null };
+  const STEPS = ['start', 'distance', 'prefs'];
+  const go = s => { ui.screen = s; update(); };
+  root.onclick = e => {
+    const t = e.target.closest('[data-act]'); if (!t) return; const a = t.dataset.act, arg = t.dataset.arg;
+    if (a === 'go') go(arg);
+    if (a === 'startPlace') setPoint('start', arg === 'gps' ? GPS : PLACES[+arg]);
+    if (a === 'endMode') setPoint('end', arg === 'loop' ? null : (S.request.end || PLACES[2]));
+    if (a === 'endPlace') setPoint('end', arg === 'gps' ? GPS : PLACES[+arg]);
+    if (a === 'pickMap') { ui.picking = arg; go('pick'); }
+    if (a === 'pref') { const [k, v] = arg.split(':'); S.request.prefs[k] = +v; update(); }
+    if (a === 'find') { startGenerate(); go('results'); }
+    if (a === 'open') { selectCand(+arg); go('detail'); }
+    if (a === 'send') sendToWatch();
+    if (a === 'regen') { startGenerate(); update(); }
+  };
+  root.oninput = e => { if (e.target.id === 'b-km') { S.request.km = +e.target.value; renderDebug(); root.querySelector('#b-kmv').textContent = S.request.km.toFixed(1) + ' km'; root.querySelector('#b-tol').textContent = tolText(); } };
+  const bar = (title, back) => `<div class="appbar">${back ? `<button class="btn text" data-act="go" data-arg="${back}" style="font-size:20px">←</button>` : '<span style="width:12px"></span>'}${title}</div>`;
+  const stepper = s => `<div class="row" style="gap:6px;padding:10px 16px">${STEPS.map((x, i) => `<div style="flex:1;height:4px;border-radius:2px;background:${STEPS.indexOf(s) >= i ? 'var(--primary)' : '#e8eaed'}"></div>`).join('')}</div>`;
+  const footer = (next, label) => `<div style="position:absolute;bottom:0;left:0;right:0;padding:16px;background:#fff;border-top:1px solid #f1f3f4"><button class="btn primary wide" data-act="${next[0]}" data-arg="${next[1] || ''}">${label}</button></div>`;
+  const radio = (on, act, arg, text, sub) => `<div class="card row" style="margin:0 16px 8px;${on ? 'border:2px solid var(--primary)' : ''}" data-act="${act}" data-arg="${arg}"><span style="font-size:18px">${on ? '◉' : '○'}</span><div><div>${text}</div>${sub ? `<div class="muted">${sub}</div>` : ''}</div></div>`;
+  const screens = {
+    start: () => { const r = S.request; return bar('New run') + stepper('start') + `<div style="overflow:auto;height:calc(100% - 150px)">
+      <div class="label" style="margin-left:16px">Start</div>
+      ${radio(r.start.gps, 'startPlace', 'gps', '◎ Current location', 'GPS')}
+      ${PLACES.map((p, i) => radio(r.start.label === p.label, 'startPlace', i, '★ ' + p.label, 'Saved place')).join('')}
+      ${radio(r.start.label === 'Dropped pin', 'pickMap', 'start', '✚ Pick on map', r.start.label === 'Dropped pin' ? 'Pin set' : '')}
+      <div class="label" style="margin-left:16px">Finish</div>
+      <div class="seg" style="margin:0 16px 8px"><button class="${r.end ? '' : 'on'}" data-act="endMode" data-arg="loop">Back at start</button><button class="${r.end ? 'on' : ''}" data-act="endMode" data-arg="p2p">Somewhere else</button></div>
+      ${r.end ? [radio(r.end.gps, 'endPlace', 'gps', '◎ Current location'), ...PLACES.map((p, i) => radio(r.end.label === p.label, 'endPlace', i, '★ ' + p.label)), radio(r.end.label === 'Dropped pin', 'pickMap', 'end', '✚ Pick on map')].join('') : ''}
+      </div>` + footer(['go', 'distance'], 'Next: distance'); },
+    pick: () => bar('Tap to set ' + (ui.picking === 'start' ? 'start' : 'finish'), 'start') + `<div id="b-map" style="position:absolute;top:56px;bottom:0;left:0;right:0"></div>`,
+    distance: () => bar('How far?', 'start') + stepper('distance') + `<div class="center" style="padding:60px 24px">
+      <div id="b-kmv" style="font:400 56px Roboto">${S.request.km.toFixed(1)} km</div>
+      <input id="b-km" type="range" min="1" max="42" step="0.5" value="${S.request.km}" style="width:100%;margin:24px 0">
+      <div id="b-tol" class="muted">${tolText()}</div>
+      <div class="muted" style="margin-top:24px">${S.request.end ? `Point-to-point · direct distance ${fmtKm(hav(S.request.start.p, S.request.end.p))}` : 'Loop from ' + S.request.start.label}</div></div>` + footer(['go', 'prefs'], 'Next: preferences'),
+    prefs: () => bar('What kind of run?', 'distance') + stepper('prefs') + `<div style="padding:0 16px;overflow:auto;height:calc(100% - 150px)">${PREFS.map(p => `
+      <div style="padding:12px 0;border-bottom:1px solid #f1f3f4"><div class="row"><span style="font-size:22px">${p.icon}</span><div><div>${p.label}</div><div class="muted">${p.desc}</div></div></div>
+      <div class="seg" style="margin-top:8px">${STRENGTH.map((s, v) => `<button class="${S.request.prefs[p.k] === v ? 'on' : ''}" data-act="pref" data-arg="${p.k}:${v}">${s}</button>`).join('')}</div></div>`).join('')}</div>` + footer(['find'], 'Find routes'),
+    results: () => bar('Pick a route', 'prefs') + `<div id="b-live" style="padding:0 16px;overflow:auto;height:calc(100% - 56px)"></div>`,
+    detail: () => { const c = S.candidates[S.selected]; return bar(c.id + ' · ' + fmtKm(c.km), 'results') + `<div id="b-map" style="height:330px"></div><div id="b-live" style="padding:12px 16px"></div>`; },
+  };
+  const live = {
+    results: () => { const n = S.gen.expected, have = S.candidates.length, running = S.gen.status === 'running';
+      return `<div class="muted" style="margin:10px 0">${fmtKm(S.request.km)} ${S.request.end ? 'to ' + S.request.end.label : 'loop'} from ${S.request.start.label} · ${activePrefs().map(p => p.label + ' ' + dots(S.request.prefs[p.k])).join(', ') || 'no preferences'}</div>
+      ${running ? `<div class="progress" style="margin-bottom:10px"><div style="width:${(have + .4) / n * 100}%"></div></div>` : ''}
+      ${S.candidates.map((c, i) => `<div class="card row" style="margin-bottom:10px" data-act="open" data-arg="${i}">${thumbSvg(c, 76)}
+        <div style="flex:1"><div class="row between"><b>${c.id}</b>${c.offTolerance ? `<span class="flag">${c.note} · ${devText(c)}</span>` : ''}</div>
+        <div style="font:500 20px Roboto">${fmtKm(c.km)}</div><div class="muted">↗ ${c.ascent} m · ${c.heading}</div>
+        <div class="muted">${activePrefs().map(p => `${p.icon} ${c.match[p.k]}%`).join('  ')}</div></div><span class="muted">›</span></div>`).join('')}
+      ${running ? Array.from({ length:n - have }, () => `<div class="skeleton" style="height:100px;margin-bottom:10px"></div>`).join('') : ''}
+      ${!running && have < 3 ? `<div class="muted center" style="margin:10px">Only ${have} route${have === 1 ? '' : 's'} found. <a href="#" data-act="go" data-arg="prefs">Loosen preferences?</a></div>` : ''}
+      ${!running ? `<button class="btn wide" data-act="regen">↻ Try again</button>` : ''}`; },
+    detail: () => { const c = S.candidates[S.selected];
+      return `<div class="row between"><div><div style="font:500 26px Roboto">${fmtKm(c.km)}</div><div class="muted">${devText(c)} vs ${fmtKm(S.request.km)} · ↗ ${c.ascent} m</div></div>${c.offTolerance ? `<span class="flag">${c.note}</span>` : ''}</div>
+      <div style="margin:10px 0">${elevSvg(c, 368, 50)}</div>
+      ${activePrefs().map(p => `<div class="row" style="margin:6px 0"><span style="width:110px;font-size:13px">${p.icon} ${p.label}</span><div class="meter" style="flex:1"><div style="width:${c.match[p.k]}%"></div></div><span class="muted" style="width:36px;text-align:right">${c.match[p.k]}%</span></div>`).join('')}
+      <button class="btn primary wide" style="margin-top:12px" data-act="send" ${S.send.status === 'sending' ? 'disabled' : ''}>⌚ ${sendBtnLabel()}</button>${sendStateHtml()}`; },
+  };
+  this.render = () => {
+    if (ui.built !== ui.screen) {
+      if (ui.map) { ui.map.remove(); liveMaps = liveMaps.filter(m => m !== ui.map); ui.map = null; }
+      root.innerHTML = screens[ui.screen](); ui.built = ui.screen;
+      const el = root.querySelector('#b-map');
+      if (el) {
+        ui.map = makeMap(el, { zoom:12 });
+        if (ui.screen === 'pick') ui.map.on('click', e => { setPoint(ui.picking, { label:'Dropped pin', p:[e.lngLat.lng, e.lngLat.lat] }); go('start'); });
+        if (ui.screen === 'detail') { const c = S.candidates[S.selected]; setRoutes(ui.map, [c], 0); fit(ui.map, c.pts, 30); }
+        setMarkers(ui.map);
+      }
+    }
+    if (live[ui.screen]) root.querySelector('#b-live').innerHTML = live[ui.screen]();
+  };
+  this.render();
+} };
+
+// ---------------------------------------------------------------- Variant C: sentence + presets, one candidate at a time
+const VariantC = { key:'C', name:'Quick run + one-at-a-time', mount(root) {
+  root.innerHTML = `<div class="fill" id="c-map"></div><div id="c-top"></div><div id="c-panel"></div><div id="c-over"></div>`;
+  const map = makeMap(root.querySelector('#c-map'), { zoom:12.8 });
+  const ui = { mode: S.candidates.length ? 'results' : 'home', tune:false, menu:null, pick:null, lastSel:-1, lastCount:-1 };
+  const PRESET = { soft:3, scenic:2, traffic:2, incline:2 };
+  map.on('click', e => { if (e.routeHit) return; if (ui.pick) { setPoint(ui.pick, { label:'Dropped pin', p:[e.lngLat.lng, e.lngLat.lat] }); ui.pick = null; update(); } });
+  map._onRoute = i => ui.mode === 'results' && selectCand(i);
+  root.onclick = e => {
+    const t = e.target.closest('[data-act]'); if (!t) return; const a = t.dataset.act, arg = t.dataset.arg;
+    if (a === 'km') S.request.km = Math.max(1, S.request.km + +arg);
+    if (a === 'preset') S.request.prefs[arg] = S.request.prefs[arg] ? 0 : PRESET[arg];
+    if (a === 'pref') { const [k, v] = arg.split(':'); S.request.prefs[k] = +v; }
+    if (a === 'tune') ui.tune = !ui.tune;
+    if (a === 'menu') ui.menu = ui.menu === arg ? null : arg;
+    if (a === 'place') { const [w, v] = arg.split(':'); ui.menu = null; if (v === 'pick') ui.pick = w; else if (v === 'loop') setPoint('end', null); else setPoint(w, v === 'gps' ? GPS : PLACES[+v]); map.flyTo({ center:S.request.start.p, zoom:12.8 }); }
+    if (a === 'find') { ui.mode = 'results'; ui.lastCount = -1; startGenerate(); }
+    if (a === 'step') { const n = S.candidates.length; if (n) selectCand((S.selected + +arg + n) % n); }
+    if (a === 'home') { ui.mode = 'home'; cancelGenerate(); S.candidates = []; S.selected = null; S.send = { status:'idle', msg:'' }; map.flyTo({ center:S.request.start.p, zoom:12.8 }); }
+    if (a === 'send') sendToWatch();
+    if (a === 'closeSent') { S.send = { status:'idle', msg:'' }; }
+    update();
+  };
+  this.render = () => {
+    const req = S.request, top = root.querySelector('#c-top'), panel = root.querySelector('#c-panel'), over = root.querySelector('#c-over');
+    const link = (arg, text) => `<span data-act="menu" data-arg="${arg}" style="color:var(--primary);border-bottom:2px dotted var(--primary);cursor:pointer">${text}</span>`;
+    const menu = w => `<div class="menu" style="bottom:100%;left:16px;margin-bottom:6px">${w === 'end' ? `<div data-act="place" data-arg="end:loop">↺ Back here (loop)</div><hr>` : ''}<div data-act="place" data-arg="${w}:gps">◎ Current location</div>
+      ${PLACES.map((p, i) => `<div data-act="place" data-arg="${w}:${i}">★ ${p.label}</div>`).join('')}<hr><div data-act="place" data-arg="${w}:pick">✚ Pick on map</div></div>`;
+    top.innerHTML = ui.pick ? `<div class="banner" style="top:16px">Tap the map to set the ${ui.pick === 'start' ? 'start' : 'finish'}</div>` : '';
+    over.innerHTML = '';
+    if (ui.mode === 'home') {
+      panel.innerHTML = `<div class="sheet" style="padding:20px">
+        <div style="position:relative;font:400 24px/1.5 Roboto">
+          Run <span style="white-space:nowrap"><button class="icon" style="width:30px;height:30px;font-size:16px" data-act="km" data-arg="-1">−</button> <b>${req.km} km</b> <button class="icon" style="width:30px;height:30px;font-size:16px" data-act="km" data-arg="1">+</button></span><br>
+          from ${link('start', req.start.label.toLowerCase() === 'current location' ? 'here' : req.start.label)}${req.end ? ` to ${link('end', req.end.label)}` : `, ${link('end', 'back here')}`}
+          ${ui.menu ? menu(ui.menu) : ''}</div>
+        <div class="row" style="gap:8px;margin:16px 0 6px">${PREFS.map(p => `<div data-act="preset" data-arg="${p.k}" style="flex:1;text-align:center;padding:10px 4px;border-radius:14px;cursor:pointer;${req.prefs[p.k] ? 'background:#d3e3fd' : 'background:#f1f3f4'}">
+          <div style="font-size:26px">${p.icon}</div><div style="font-size:11px">${p.label}</div><div class="dots" style="height:14px">${dots(req.prefs[p.k])}</div></div>`).join('')}</div>
+        <div class="center"><button class="btn text" data-act="tune">${ui.tune ? 'Hide fine-tuning ▴' : 'Fine-tune ▾'}</button></div>
+        ${ui.tune ? PREFS.map(p => `<div class="row" style="margin:4px 0"><span style="width:96px;font-size:12px">${p.icon} ${p.label}</span><div class="seg" style="flex:1">${STRENGTH.map((s, v) => `<button class="${req.prefs[p.k] === v ? 'on' : ''}" data-act="pref" data-arg="${p.k}:${v}">${s}</button>`).join('')}</div></div>`).join('') : ''}
+        <button class="btn primary wide" style="margin-top:10px;border-radius:28px;font-size:17px;padding:16px" data-act="find">Find routes</button></div>`;
+      setRoutes(map, [], null);
+    } else {
+      const n = S.gen.expected, have = S.candidates.length, running = S.gen.status === 'running', c = S.candidates[S.selected];
+      top.innerHTML += `<div style="position:absolute;top:12px;left:12px;right:12px" class="row between">
+        <button class="chip" style="border:0;box-shadow:0 1px 4px #0003;padding:10px 14px" data-act="home">✕ ${req.km} km ${activePrefs().map(p => p.icon).join('')}</button>
+        ${running ? `<span class="chip" style="border:0;box-shadow:0 1px 4px #0003;padding:10px 14px">Finding routes… ${have}/${n}</span>` : ''}</div>`;
+      panel.innerHTML = c ? `<div class="sheet" style="padding:16px">
+        <div class="row between"><button class="icon" data-act="step" data-arg="-1" ${have < 2 ? 'disabled' : ''}>‹</button>
+          <div class="center"><div class="muted">Route ${S.selected + 1} of ${running ? n : have}${running && have < n ? ' (more coming)' : ''}</div><div style="font:500 30px Roboto;color:${c.color}">${fmtKm(c.km)}</div></div>
+          <button class="icon" data-act="step" data-arg="1" ${have < 2 ? 'disabled' : ''}>›</button></div>
+        <div class="center" style="margin:4px 0">${c.offTolerance ? `<span class="flag">${c.note}: ${devText(c)} off ${req.km} km</span>` : `<span class="muted">${devText(c)} · ↗ ${c.ascent} m · ${c.heading}</span>`}</div>
+        <div style="margin:8px 0">${elevSvg(c, 368, 44)}</div>
+        <div class="row" style="gap:10px">${activePrefs().map(p => `<div style="flex:1"><div style="font-size:11px">${p.icon} ${c.match[p.k]}%</div><div class="meter"><div style="width:${c.match[p.k]}%"></div></div></div>`).join('')}</div>
+        ${!running && have < 3 ? `<div class="muted center" style="margin-top:6px">Only ${have} route${have === 1 ? '' : 's'} found.</div>` : ''}
+        <button class="btn primary wide" style="margin-top:12px;border-radius:28px;font-size:17px;padding:16px" data-act="send" ${S.send.status === 'sending' ? 'disabled' : ''}>⌚ ${S.send.status === 'sending' ? 'Sending…' : S.send.status === 'failed' ? 'Retry' : 'Run this one'}</button>
+        ${S.send.status === 'failed' || S.send.status === 'sending' ? sendStateHtml() : ''}</div>`
+        : `<div class="sheet" style="padding:24px"><div class="skeleton" style="height:180px"></div><div class="muted center" style="margin-top:10px">Finding routes… usually under 20 s</div></div>`;
+      if (S.send.status === 'sent') over.innerHTML = `<div class="fill" style="background:#fffffff2;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center">
+        <div style="font-size:64px">⌚</div><div style="font:500 22px Roboto;margin:12px 0">${fmtKm(c.km)} is on your watch</div>
+        <div class="muted">Open <b>Route Runner</b> on the Vivoactive 5 and press Start.</div>
+        <button class="btn primary" style="margin-top:24px" data-act="closeSent">Done</button></div>`;
+      setRoutes(map, S.candidates, S.selected, true);
+      if (have !== ui.lastCount || S.selected !== ui.lastSel) { ui.lastCount = have; ui.lastSel = S.selected; if (c) fit(map, c.pts.concat([req.start.p]), { top:80, bottom:340, left:40, right:40 }); }
+    }
+    setMarkers(map);
+  };
+  this.render();
+} };
+
+// ---------------------------------------------------------------- debug panel + switcher
+function renderDebug() {
+  const d = document.getElementById('debug');
+  const st = JSON.parse(JSON.stringify(S));
+  st.candidates = S.candidates.map(c => ({ id:c.id, km:+c.km.toFixed(2), dev:devText(c), offTolerance:c.offTolerance, ascent:c.ascent, match:c.match }));
+  st.request.start.p = st.request.start.p.map(x => +x.toFixed(4)); if (st.request.end) st.request.end.p = st.request.end.p.map(x => +x.toFixed(4));
+  if (S.gen.startedAt) st.gen.elapsed = ((Date.now() - S.gen.startedAt) / 1000).toFixed(1) + ' s';
+  d.innerHTML = `<h3>PROTOTYPE · state</h3>
+    <div>Scenario (applies on next "Find routes" / send):</div>
+    <select id="scenario">${[['normal', 'Normal: 3 routes, all within ±5%'], ['offTol', 'Route 3 is outside ±5%'], ['allOff', 'Nothing within ±5%'], ['onlyTwo', 'Only 2 routes found'], ['slow', 'Slow: ~20 s for all 3'], ['watchFail', 'Watch doesn’t acknowledge']].map(([k, t]) => `<option value="${k}" ${S.scenario === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    <br><button id="realgps">Use my real location as "Current location"</button>
+    <pre>${JSON.stringify(st, null, 1)}</pre>`;
+  d.querySelector('#scenario').onchange = e => { S.scenario = e.target.value; renderDebug(); };
+  d.querySelector('#realgps').onclick = () => navigator.geolocation.getCurrentPosition(pos => { GPS.p = [pos.coords.longitude, pos.coords.latitude]; if (S.request.start.gps) S.request.start = { ...GPS }; switchTo(currentVariant.key); });
+}
+const VARIANTS = [VariantA, VariantB, VariantC];
+function switchTo(key) {
+  killMaps();
+  const v = VARIANTS.find(x => x.key === key) || VARIANTS[0];
+  const url = new URL(location); url.searchParams.set('variant', v.key); history.replaceState(null, '', url);
+  currentVariant = v; const phone = document.getElementById('phone'); phone.onclick = phone.oninput = null; v.mount(phone);
+  const i = VARIANTS.indexOf(v);
+  document.getElementById('switcher').innerHTML = `<button id="prev">←</button><span>${v.key} (${v.name})</span><button id="next">→</button>`;
+  document.getElementById('prev').onclick = () => switchTo(VARIANTS[(i + VARIANTS.length - 1) % VARIANTS.length].key);
+  document.getElementById('next').onclick = () => switchTo(VARIANTS[(i + 1) % VARIANTS.length].key);
+  renderDebug();
+}
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+  const i = VARIANTS.indexOf(currentVariant);
+  if (e.key === 'ArrowRight') switchTo(VARIANTS[(i + 1) % VARIANTS.length].key);
+  if (e.key === 'ArrowLeft') switchTo(VARIANTS[(i + VARIANTS.length - 1) % VARIANTS.length].key);
+});
+setInterval(() => S.gen.status === 'running' && renderDebug(), 500);
+switchTo(new URLSearchParams(location.search).get('variant') || 'A');
+</script>
+</body>
+</html>
