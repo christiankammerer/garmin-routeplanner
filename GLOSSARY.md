@@ -9,7 +9,7 @@ What the runner asks for: a target distance, a start point, an optional end poin
 _Avoid_: Query, search, settings
 
 **Target distance**:
-The length the runner wants the route to be; a generated route may deviate from it within a small tolerance.
+The shortest the runner wants the route to be; a generated route may run a little longer, never shorter.
 _Avoid_: Length, goal
 
 **Route preference**:
@@ -41,11 +41,11 @@ One of the few routes generated for a single route request, from which the runne
 _Avoid_: Option, suggestion, alternative
 
 **Saved place**:
-A named location the runner kept in the phone app to use as a start or end point.
+A named location the runner kept in the phone app to use as a start or end point; a shortcut for filling in a route request, which saved routes never refer back to.
 _Avoid_: Favourite, bookmark, location
 
 **Saved route**:
-A route the runner kept in the phone app to run again.
+A route the runner kept in the phone app to run again, unchanged from when it was saved.
 _Avoid_: Favourite, bookmark
 
 ## On the watch

@@ -12,4 +12,4 @@ Route generation runs offline on the phone through the separate BRouter Android 
 ## Consequences
 
 - The runner installs BRouter and downloads the Sweden segments once.
-- BRouter's round trip takes a radius, not a length, so our app calibrates (generate, measure, rescale) until a route is within ±5% of the target distance; point-to-point routes are padded to the target distance with our own detour points.
+- BRouter's round trip takes a radius, not a length, so our app calibrates (generate, measure, rescale) until a route is within −0%/+8% of the target distance (aiming for +3%); point-to-point routes are padded into the same band with our own detour points. When rescaling oscillates, the app bisects the radius, then nudges the direction, then replaces the direction with a fresh one; only then does it fall back to the closest result, flagged (originally ±5%, amended after the smoke test showed loop length jumping across the band).
