@@ -1,2 +1,6 @@
 .claude/worktrees/
 .claude/settings.local.json
+
+# Connect IQ signing key (PEM and DER)
+developer_key
+developer_key.*
