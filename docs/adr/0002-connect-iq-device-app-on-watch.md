@@ -12,4 +12,4 @@ Courses reach the Vivoactive 5 as messages from our Android app (Connect IQ Mobi
 
 - We build and maintain the run screens (course page, stats page, laps, start/stop/save) that the built-in activity would otherwise give us.
 - The runner installs our watch app once (sideload now, Connect IQ Store if published) and needs Garmin Connect Mobile on the phone.
-- The phone prepares each course (simplified polyline, cumulative distances, turn points from BRouter's turn hints), so the watch app stays small. Message size limits are unverified until the smoke test.
+- The phone prepares each course (simplified polyline, cumulative distances, turn points from BRouter's turn hints), so the watch app stays small. The smoke test showed a 500-point course (sent as ints) fits in one message with about 3× headroom; a course simplified at 5 m is about 100–200 points and takes about 5 s to send.
