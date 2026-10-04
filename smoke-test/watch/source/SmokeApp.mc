@@ -31,7 +31,7 @@ class SmokeApp extends Application.AppBase {
         return [new SmokeView()];
     }
 
-    function onPhoneMessage(msg) {
+    function onPhoneMessage(msg as Communications.PhoneAppMessage) as Void {
         var data = msg.data;
         var sinceStart = System.getTimer() - startedAt;
         received++;

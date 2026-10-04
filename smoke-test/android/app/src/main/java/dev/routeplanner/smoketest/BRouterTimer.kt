@@ -82,8 +82,8 @@ class BRouterTimer(private val context: Context, private val log: (String) -> Un
 
     private fun roundTrip(svc: IBRouterService, start: LatLon, radiusM: Int, direction: Int, profile: String): Pair<List<LatLon>, Double>? {
         val params = Bundle().apply {
-            putDoubleArray("lats", doubleArrayOf(start.lat))
-            putDoubleArray("lons", doubleArrayOf(start.lon))
+            // The lats/lons arrays need two points; a round trip has one start, which only lonlats accepts.
+            putString("lonlats", "${start.lon},${start.lat}")
             putInt("engineMode", 4)
             putString("roundTripDistance", radiusM.toString())
             putString("direction", direction.toString())

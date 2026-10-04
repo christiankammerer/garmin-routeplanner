@@ -5,3 +5,10 @@ android/local.properties
 android/.idea/
 android/.kotlin/
 watch/bin/
+watch/gen/
+watch/mir/
+watch/internal-mir/
+watch/*.prg
+watch/*.prg.debug.xml
+.idea/
+*.iml
