@@ -54,6 +54,10 @@ _Avoid_: Favourite, bookmark
 A route as it exists on the watch, in a form the watch can navigate.
 _Avoid_: Route (on the watch side), track, workout
 
+**Delivery**:
+Getting a course onto the watch; complete only when the watch confirms it holds the course.
+_Avoid_: Sync, upload, transfer
+
 **Off-route alert**:
 The watch's warning that the runner has left the course.
 _Avoid_: Deviation warning
