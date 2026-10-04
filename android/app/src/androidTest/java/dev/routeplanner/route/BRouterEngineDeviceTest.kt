@@ -23,7 +23,7 @@ class BRouterEngineDeviceTest {
 
     @Test
     fun returnsALoopRouteFromTheStart() = runTest {
-        val result = engine.roundTrip(start, radiusM = 1_500, directionDeg = 0)
+        val result = engine.loop(start, radiusM = 1_500, directionDeg = 0)
 
         val route = (result as EngineResult.Success).route
         assertTrue("length ${route.lengthM}", route.lengthM > 3_000)

@@ -23,5 +23,5 @@ sealed interface EngineResult {
 /** The routing engine (BRouter) as the route generator sees it. */
 interface RoutingEngine {
     /** A loop route from [start] through points on a circle of [radiusM], starting towards [directionDeg]. */
-    suspend fun roundTrip(start: LatLon, radiusM: Int, directionDeg: Int): EngineResult
+    suspend fun loop(start: LatLon, radiusM: Int, directionDeg: Int): EngineResult
 }

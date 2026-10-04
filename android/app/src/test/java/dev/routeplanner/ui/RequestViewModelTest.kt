@@ -124,4 +124,15 @@ class RequestViewModelTest {
         engine.releaseAnswers()
         assertTrue(vm.state.value.canFindRoutes)
     }
+
+    @Test
+    fun `changing the target distance clears the route found for the old one`() {
+        val vm = viewModel()
+        vm.onLocation(HOME)
+        vm.findRoutes()
+
+        vm.longer()
+
+        assertEquals(RouteState.None, vm.state.value.routeState)
+    }
 }

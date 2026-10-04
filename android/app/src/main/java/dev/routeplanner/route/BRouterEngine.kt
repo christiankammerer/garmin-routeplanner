@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.IBinder
 import btools.routingapp.IBRouterService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
@@ -35,15 +36,15 @@ class BRouterEngine(context: Context) : RoutingEngine {
     private val bindLock = Mutex()
     private var service: IBRouterService? = null
 
-    override suspend fun roundTrip(start: LatLon, radiusM: Int, directionDeg: Int): EngineResult {
+    override suspend fun loop(start: LatLon, radiusM: Int, directionDeg: Int): EngineResult {
         val answer = when (val call = request(roundTripParams(start, radiusM, directionDeg, DEFAULT_PROFILE_PARAMS))) {
             Call.NotInstalled -> return EngineResult.Failure(RoutingProblem.NotInstalled)
             is Call.Broken -> return EngineResult.Failure(RoutingProblem.EngineError(call.message))
             is Call.Answered -> call.answer
         }
         return when {
-            answer == null -> EngineResult.Failure(RoutingProblem.EngineError("BRouter returned no track"))
-            answer.trimStart().startsWith("{") -> EngineResult.Success(parseTrack(answer))
+            answer == null -> EngineResult.Failure(RoutingProblem.EngineError("BRouter returned no route"))
+            answer.trimStart().startsWith("{") -> EngineResult.Success(parseRoute(answer))
             isMissingSegments(answer) -> EngineResult.Failure(RoutingProblem.SegmentsMissing)
             else -> EngineResult.Failure(RoutingProblem.EngineError(answer))
         }
@@ -69,16 +70,19 @@ class BRouterEngine(context: Context) : RoutingEngine {
 
         data class Broken(val message: String) : Call
 
-        /** BRouter's answer: a track, an error message, or null. */
+        /** BRouter's answer: a route as JSON, an error message, or null. */
         data class Answered(val answer: String?) : Call
     }
 
     /** Sends one request to BRouter. The call blocks inside BRouter, so it runs on the IO dispatcher. */
     internal suspend fun request(params: Bundle): Call {
-        val svc = bind() ?: return Call.NotInstalled
+        if (!isInstalled()) return Call.NotInstalled
+        val svc = bind() ?: return Call.Broken("Couldn't connect to the BRouter service")
         return withContext(Dispatchers.IO) {
             try {
                 Call.Answered(svc.getTrackFromParams(params))
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // A dead binder means BRouter went away; bind afresh next time.
                 service = null
@@ -89,7 +93,6 @@ class BRouterEngine(context: Context) : RoutingEngine {
 
     private suspend fun bind(): IBRouterService? = bindLock.withLock {
         service?.let { return it }
-        if (!isInstalled()) return null
         withTimeoutOrNull(BIND_TIMEOUT_MS) {
             suspendCancellableCoroutine { cont ->
                 val connection = object : ServiceConnection {
@@ -132,8 +135,8 @@ class BRouterEngine(context: Context) : RoutingEngine {
 private fun isMissingSegments(answer: String) =
     Regex("""datafile \S+ not found""").containsMatchIn(answer) || "not mapped in existing datafile" in answer
 
-/** Reads BRouter's JSON track: a GeoJSON feature with [lon, lat, elevation] points. */
-internal fun parseTrack(json: String): Route {
+/** Reads a route from BRouter's JSON track format: a GeoJSON feature with [lon, lat, elevation] points. */
+internal fun parseRoute(json: String): Route {
     val feature = JSONObject(json).getJSONArray("features").getJSONObject(0)
     val coords = feature.getJSONObject("geometry").getJSONArray("coordinates")
     val points = List(coords.length()) { i ->

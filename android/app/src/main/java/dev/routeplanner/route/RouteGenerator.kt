@@ -22,7 +22,7 @@ class RouteGenerator(private val engine: RoutingEngine) {
     /** One loop route from [start], at a radius estimated from [target]; no length tuning yet. */
     suspend fun loopRoute(start: LatLon, target: TargetDistance): RouteOutcome {
         val radiusM = (target.metres * AIM_ABOVE_TARGET / LOOP_LENGTH_PER_RADIUS).roundToInt()
-        return when (val result = engine.roundTrip(start, radiusM, directionDeg = 0)) {
+        return when (val result = engine.loop(start, radiusM, directionDeg = 0)) {
             is EngineResult.Success -> RouteOutcome.Found(result.route)
             is EngineResult.Failure -> RouteOutcome.Failed(result.problem)
         }

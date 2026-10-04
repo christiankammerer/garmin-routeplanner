@@ -232,8 +232,8 @@ private fun RouteStatus(
                 action = "Get BRouter" to onGetBRouter,
             )
             RoutingProblem.SegmentsMissing -> Message(
-                "BRouter has no map data for where you are. Open BRouter and download the segments " +
-                    "that cover this area, then try again.",
+                "BRouter has no map data for where you are. Open BRouter (choose its folder if it " +
+                    "asks), download the segments that cover this area, then try again.",
                 action = "Open BRouter" to onOpenBRouter,
             )
             is RoutingProblem.EngineError -> Message("Couldn't find a route. Please try again.")

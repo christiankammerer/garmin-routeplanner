@@ -24,7 +24,7 @@ class FakeRoutingEngine private constructor(
         answers.complete(Unit)
     }
 
-    override suspend fun roundTrip(start: LatLon, radiusM: Int, directionDeg: Int): EngineResult {
+    override suspend fun loop(start: LatLon, radiusM: Int, directionDeg: Int): EngineResult {
         answers.await()
         problem?.let { return EngineResult.Failure(it) }
         val length = lengthM(radiusM, directionDeg)

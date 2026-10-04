@@ -40,18 +40,24 @@ class RequestViewModel(private val generator: RouteGenerator) : ViewModel() {
 
     val quickPicks = TargetDistance.QuickPicks
 
-    fun pick(distance: TargetDistance) = _state.update { it.copy(targetDistance = distance) }
+    fun pick(distance: TargetDistance) = setTarget { distance }
 
-    fun longer() = _state.update { it.copy(targetDistance = it.targetDistance.longer()) }
+    fun longer() = setTarget { it.longer() }
 
-    fun shorter() = _state.update { it.copy(targetDistance = it.targetDistance.shorter()) }
+    fun shorter() = setTarget { it.shorter() }
+
+    /** A route found for the old target would read as the result for the new one, so it goes. */
+    private fun setTarget(change: (TargetDistance) -> TargetDistance) = _state.update {
+        val routeState = if (it.routeState == RouteState.Finding) it.routeState else RouteState.None
+        it.copy(targetDistance = change(it.targetDistance), routeState = routeState)
+    }
 
     fun onLocation(location: LatLon) = _state.update { it.copy(start = location) }
 
     fun findRoutes() {
         val request = _state.value
         if (!request.canFindRoutes) return
-        val start = request.start ?: return
+        val start = checkNotNull(request.start)
         _state.update { it.copy(routeState = RouteState.Finding) }
         viewModelScope.launch {
             val routeState = when (val outcome = generator.loopRoute(start, request.targetDistance)) {
