@@ -33,24 +33,25 @@ sealed interface DeliveryOutcome {
  */
 class Delivery(private val watch: WatchLink) {
     suspend fun deliver(course: Course): DeliveryOutcome {
-        when (exchange(PhoneMessage.Ping, PING_TIMEOUT_MS) { it == WatchMessage.Pong }) {
-            Reply.Received -> {}
-            Reply.None -> return DeliveryOutcome.Failed(DeliveryProblem.AppNotOpen)
-            Reply.NotConnected -> return DeliveryOutcome.Failed(DeliveryProblem.NotConnected)
-            Reply.SendFailed -> return DeliveryOutcome.Failed(DeliveryProblem.SendFailed)
-        }
-        val ack = exchange(PhoneMessage.SendCourse(course), ACK_TIMEOUT_MS) {
+        exchange(PhoneMessage.Ping, PING_TIMEOUT_MS) { it == WatchMessage.Pong }
+            .problem(ifUnanswered = DeliveryProblem.AppNotOpen)
+            ?.let { return DeliveryOutcome.Failed(it) }
+        exchange(PhoneMessage.SendCourse(course), ACK_TIMEOUT_MS) {
             it is WatchMessage.Ack && it.id == course.id && it.sequence == course.sequence
         }
-        return when (ack) {
-            Reply.Received -> DeliveryOutcome.Delivered(course)
-            Reply.None -> DeliveryOutcome.Failed(DeliveryProblem.NoAcknowledgement)
-            Reply.NotConnected -> DeliveryOutcome.Failed(DeliveryProblem.NotConnected)
-            Reply.SendFailed -> DeliveryOutcome.Failed(DeliveryProblem.SendFailed)
-        }
+            .problem(ifUnanswered = DeliveryProblem.NoAcknowledgement)
+            ?.let { return DeliveryOutcome.Failed(it) }
+        return DeliveryOutcome.Delivered(course)
     }
 
-    private enum class Reply { Received, None, NotConnected, SendFailed }
+    private enum class Exchange { Answered, Unanswered, NotConnected, SendFailed }
+
+    private fun Exchange.problem(ifUnanswered: DeliveryProblem) = when (this) {
+        Exchange.Answered -> null
+        Exchange.Unanswered -> ifUnanswered
+        Exchange.NotConnected -> DeliveryProblem.NotConnected
+        Exchange.SendFailed -> DeliveryProblem.SendFailed
+    }
 
     /** Sends [message] and waits up to [timeoutMs] for a reply. Listens first, so a quick reply isn't missed. */
     private suspend fun exchange(message: PhoneMessage, timeoutMs: Long, isReply: (WatchMessage) -> Boolean) =
@@ -59,9 +60,9 @@ class Delivery(private val watch: WatchLink) {
                 withTimeoutOrNull(timeoutMs) { watch.messages.first(isReply) }
             }
             when (watch.send(message)) {
-                SendResult.Sent -> if (reply.await() != null) Reply.Received else Reply.None
-                SendResult.NotConnected -> Reply.NotConnected.also { reply.cancel() }
-                SendResult.Failed -> Reply.SendFailed.also { reply.cancel() }
+                SendResult.Sent -> if (reply.await() != null) Exchange.Answered else Exchange.Unanswered
+                SendResult.NotConnected -> Exchange.NotConnected.also { reply.cancel() }
+                SendResult.Failed -> Exchange.SendFailed.also { reply.cancel() }
             }
         }
 }

@@ -7,7 +7,7 @@ module CourseStore {
 
     function load() as Course? {
         var stored = Storage.getValue(KEY);
-        return stored instanceof Dictionary ? Course.fromMessage(stored) : null;
+        return stored instanceof Dictionary ? Course.fromDictionary(stored) : null;
     }
 
     function save(course as Course) as Void {

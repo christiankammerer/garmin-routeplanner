@@ -32,7 +32,17 @@ fun wobblyLoop(): Route {
         val r = radiusM + 30 * sin(a * 300)
         LatLon(centre.lat + r * sin(a) / mPerDegLat, centre.lon + r * cos(a) / mPerDegLon)
     }
-    return Route(points, 10_000)
+    return Route(points, lengthM(points))
+}
+
+/** A route's length along its points, as a routing engine would report it (flat-earth). */
+fun lengthM(points: List<LatLon>): Int {
+    val mPerDegLat = 111_320.0
+    return points.zipWithNext().sumOf { (a, b) ->
+        val dx = (b.lon - a.lon) * mPerDegLat * cos(Math.toRadians(a.lat))
+        val dy = (b.lat - a.lat) * mPerDegLat
+        sqrt(dx * dx + dy * dy)
+    }.toInt()
 }
 
 /** How far [p] lies from the polyline [line], in metres (flat-earth, fine at a few km). */

@@ -30,14 +30,16 @@ data class Course(val id: String, val sequence: Int, val totalM: Int, val points
 
 /**
  * Builds the course for [route]: its line simplified at about 5 m and capped at [MAX_COURSE_POINTS].
- * Distances are measured along the full-resolution line, so simplifying doesn't shorten the course.
+ * The course is as long as the route says, the distance the phone shows; cumulative metres are
+ * measured along the full-resolution line and scaled to that, so simplifying doesn't shorten it.
  */
 fun buildCourse(route: Route, sequence: Int): Course {
-    val cumM = cumulativeM(route.points)
+    val measuredM = cumulativeM(route.points)
+    val scale = if (measuredM.last() > 0) route.lengthM / measuredM.last() else 0.0
     val points = simplify(route.points).map { i ->
-        CoursePoint(route.points[i].lat.toE6(), route.points[i].lon.toE6(), cumM[i].roundToInt())
+        CoursePoint(route.points[i].lat.toE6(), route.points[i].lon.toE6(), (measuredM[i] * scale).roundToInt())
     }
-    return Course(id = geometryId(route.points), sequence = sequence, totalM = points.last().cumM, points = points)
+    return Course(id = geometryId(route.points), sequence = sequence, totalM = route.lengthM, points = points)
 }
 
 private fun Double.toE6() = (this * 1e6).roundToInt()

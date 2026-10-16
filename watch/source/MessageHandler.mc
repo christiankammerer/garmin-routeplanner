@@ -24,7 +24,7 @@ module MessageHandler {
             return new Reply({"t" => "pong"}, null);
         }
         if ("course".equals(type)) {
-            var course = Course.fromMessage(data);
+            var course = Course.fromDictionary(data);
             if (course != null) {
                 return new Reply(ack(course, "stored"), course);
             }

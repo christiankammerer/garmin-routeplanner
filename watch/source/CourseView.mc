@@ -3,7 +3,7 @@ import Toybox.Lang;
 import Toybox.Math;
 import Toybox.WatchUi;
 
-// The course page: the route line, fitted to the screen, north up, and its total distance.
+// The course page: the course line, fitted to the screen, north up, and its total distance.
 class CourseView extends WatchUi.View {
     private var _course as Course;
     private var _xs as Array<Number> = [];
@@ -17,15 +17,14 @@ class CourseView extends WatchUi.View {
     // Projects the line once: flat-earth around the course's middle, scaled into a centred box
     // that leaves room for the distance below it on the round screen.
     function onLayout(dc as Dc) as Void {
-        var pts = _course.points;
         var n = _course.pointCount();
-        var minLat = pts[0];
-        var maxLat = pts[0];
-        var minLon = pts[1];
-        var maxLon = pts[1];
+        var minLat = _course.latE6(0);
+        var maxLat = minLat;
+        var minLon = _course.lonE6(0);
+        var maxLon = minLon;
         for (var i = 1; i < n; i++) {
-            var lat = pts[i * 3];
-            var lon = pts[i * 3 + 1];
+            var lat = _course.latE6(i);
+            var lon = _course.lonE6(i);
             minLat = lat < minLat ? lat : minLat;
             maxLat = lat > maxLat ? lat : maxLat;
             minLon = lon < minLon ? lon : minLon;
@@ -45,8 +44,8 @@ class CourseView extends WatchUi.View {
         _xs = new Array<Number>[n];
         _ys = new Array<Number>[n];
         for (var i = 0; i < n; i++) {
-            _xs[i] = (cx + (pts[i * 3 + 1] - midLon) * lonScale * scale).toNumber();
-            _ys[i] = (cy - (pts[i * 3] - midLat) * scale).toNumber();
+            _xs[i] = (cx + (_course.lonE6(i) - midLon) * lonScale * scale).toNumber();
+            _ys[i] = (cy - (_course.latE6(i) - midLat) * scale).toNumber();
         }
     }
 
@@ -64,7 +63,6 @@ class CourseView extends WatchUi.View {
 
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
         var km = (_course.totalM / 1000.0).format("%.1f") + " km";
-        dc.drawText(dc.getWidth() / 2, dc.getHeight() * 0.8, Graphics.FONT_MEDIUM, km,
-            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(dc.getWidth() / 2, dc.getHeight() * 0.8, Graphics.FONT_MEDIUM, km, CENTRED);
     }
 }

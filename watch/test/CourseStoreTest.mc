@@ -13,7 +13,7 @@ function anEmptyStoreHoldsNoCourse(logger as Logger) as Boolean {
 (:test)
 function aSavedCourseLoadsBackTheSame(logger as Logger) as Boolean {
     var sample = WatchUi.loadResource(Rez.JsonData.CourseNormal) as Dictionary;
-    var course = Course.fromMessage(sample) as Course;
+    var course = Course.fromDictionary(sample) as Course;
 
     CourseStore.save(course);
     var loaded = CourseStore.load() as Course;
@@ -30,8 +30,8 @@ function aSavedCourseLoadsBackTheSame(logger as Logger) as Boolean {
 
 (:test)
 function aNewCourseReplacesTheStoredOne(logger as Logger) as Boolean {
-    var normal = Course.fromMessage(WatchUi.loadResource(Rez.JsonData.CourseNormal) as Dictionary) as Course;
-    var full = Course.fromMessage(WatchUi.loadResource(Rez.JsonData.Course500) as Dictionary) as Course;
+    var normal = Course.fromDictionary(WatchUi.loadResource(Rez.JsonData.CourseNormal) as Dictionary) as Course;
+    var full = Course.fromDictionary(WatchUi.loadResource(Rez.JsonData.Course500) as Dictionary) as Course;
 
     CourseStore.save(normal);
     CourseStore.save(full);

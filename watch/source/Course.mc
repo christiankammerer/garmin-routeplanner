@@ -18,8 +18,16 @@ class Course {
         return points.size() / 3;
     }
 
+    function latE6(i as Number) as Number {
+        return points[i * 3];
+    }
+
+    function lonE6(i as Number) as Number {
+        return points[i * 3 + 1];
+    }
+
     // Reads a course message, or a course as stored; null when it isn't a whole, well-formed course.
-    static function fromMessage(data as Dictionary) as Course? {
+    static function fromDictionary(data as Dictionary) as Course? {
         var id = data["id"];
         var sequence = data["seq"];
         var totalM = data["dist"];

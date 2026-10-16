@@ -30,11 +30,11 @@ class CourseBuilderTest {
     }
 
     @Test
-    fun `cumulative metres run from 0 along the route to the total distance`() {
+    fun `the course is as long as the route, with cumulative metres from 0 to its total distance`() {
         val course = buildCourse(stockholmLoop, sequence = 1)
 
-        // BRouter measured this route as 10262 m.
-        assertEquals(10_262.0, course.totalM.toDouble(), 30.0)
+        // BRouter measured this route as 10262 m; the phone shows that, so the watch must too.
+        assertEquals(10_262, course.totalM)
         assertEquals(0, course.points.first().cumM)
         assertEquals(course.totalM, course.points.last().cumM)
         course.points.zipWithNext().forEach { (a, b) -> assertTrue("$a then $b", b.cumM >= a.cumM) }
@@ -43,7 +43,8 @@ class CourseBuilderTest {
     @Test
     fun `a dense route is capped at 500 points`() {
         // 5000 points zig-zagging 20 m either side of a line: every corner is worth keeping at 5 m.
-        val zigzag = Route(List(5_000) { i -> LatLon(59.0 + i * 0.0002, 18.0 + (if (i % 2 == 0) 0.0 else 0.0007)) }, 0)
+        val corners = List(5_000) { i -> LatLon(59.0 + i * 0.0002, 18.0 + (if (i % 2 == 0) 0.0 else 0.0007)) }
+        val zigzag = Route(corners, lengthM(corners))
 
         val course = buildCourse(zigzag, sequence = 1)
 
