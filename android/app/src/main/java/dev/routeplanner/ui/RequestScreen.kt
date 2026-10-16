@@ -1,5 +1,7 @@
 package dev.routeplanner.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +35,8 @@ import dev.routeplanner.route.LatLon
 import dev.routeplanner.route.Route
 import dev.routeplanner.route.RoutingProblem
 import dev.routeplanner.route.TargetDistance
+import dev.routeplanner.watch.DeliveryProblem
+import dev.routeplanner.watch.WATCH_APP_NAME
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.CameraUpdate
 import org.maplibre.compose.expressions.dsl.const
@@ -112,11 +116,28 @@ fun RequestScreen(
                 onLonger = viewModel::longer,
                 onPick = viewModel::pick,
                 onFindRoutes = viewModel::findRoutes,
+                onRunThisOne = viewModel::runThisOne,
                 onAllowLocation = locationState::requestPermission,
                 onGetBRouter = onGetBRouter,
                 onOpenBRouter = onOpenBRouter,
             )
         }
+        (state.sendState as? SendState.OnWatch)?.let { OnWatchConfirmation(it.totalM, viewModel::closeConfirmation) }
+    }
+}
+
+/** Shown only once the watch has confirmed it holds the course. */
+@Composable
+private fun OnWatchConfirmation(totalM: Int, onDone: () -> Unit) {
+    BackHandler(onBack = onDone)
+    Column(
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primaryContainer).padding(32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("${formatKm(totalM)} is on your watch", style = MaterialTheme.typography.headlineMedium)
+        Text("Open $WATCH_APP_NAME and press Start", style = MaterialTheme.typography.titleMedium)
+        Button(onClick = onDone) { Text("Done") }
     }
 }
 
@@ -161,6 +182,7 @@ private fun RequestSheet(
     onLonger: () -> Unit,
     onPick: (TargetDistance) -> Unit,
     onFindRoutes: () -> Unit,
+    onRunThisOne: () -> Unit,
     onAllowLocation: () -> Unit,
     onGetBRouter: () -> Unit,
     onOpenBRouter: () -> Unit,
@@ -193,6 +215,12 @@ private fun RequestSheet(
                 }
             }
             RouteStatus(state, locationDenied, onAllowLocation, onGetBRouter, onOpenBRouter)
+            if (state.routeState is RouteState.Shown) {
+                SendStatus(state.sendState, onRetry = onRunThisOne)
+                Button(onClick = onRunThisOne, enabled = state.canRunThisOne, modifier = Modifier.fillMaxWidth()) {
+                    Text("Run this one")
+                }
+            }
             Button(onClick = onFindRoutes, enabled = state.canFindRoutes, modifier = Modifier.fillMaxWidth()) {
                 Text("Find routes")
             }
@@ -238,6 +266,26 @@ private fun RouteStatus(
             )
             is RoutingProblem.EngineError -> Message("Couldn't find a route. Please try again.")
         }
+    }
+}
+
+@Composable
+private fun SendStatus(sendState: SendState, onRetry: () -> Unit) {
+    when (sendState) {
+        SendState.None, is SendState.OnWatch -> {}
+        SendState.Sending -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Sending to your watch…")
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+        }
+        is SendState.Failed -> Message(
+            when (sendState.problem) {
+                DeliveryProblem.NotConnected ->
+                    "Your watch isn't connected. Check that it is nearby and connected in Garmin Connect."
+                DeliveryProblem.AppNotOpen -> "Open $WATCH_APP_NAME on your watch, then try again."
+                DeliveryProblem.SendFailed, DeliveryProblem.NoAcknowledgement -> "Couldn't send to watch."
+            },
+            action = "Retry" to onRetry,
+        )
     }
 }
 

@@ -1,0 +1,3 @@
+# Layered over monkey.jungle for unit tests: adds the tests and the shared sample course messages.
+base.sourcePath = source;test
+base.resourcePath = resources;test-resources

@@ -4,3 +4,8 @@
 # Connect IQ signing key (PEM and DER)
 developer_key
 developer_key.*
+
+# Connect IQ build output
+watch/bin/
+*.prg
+*.prg.debug.xml

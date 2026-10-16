@@ -1,0 +1,5 @@
+<!-- The sample course messages the phone's tests produce (contract/), for the watch's tests to accept. -->
+<resources>
+    <jsonData id="CourseNormal" filename="../../contract/course-normal.json"/>
+    <jsonData id="Course500" filename="../../contract/course-500.json"/>
+</resources>

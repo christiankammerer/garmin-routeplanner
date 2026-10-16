@@ -7,6 +7,7 @@
 
     <queries>
         <package android:name="btools.routingapp" />
+        <package android:name="com.garmin.android.apps.connectmobile" />
     </queries>
 
     <application

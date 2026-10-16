@@ -4,6 +4,9 @@ import dev.routeplanner.route.FakeRoutingEngine
 import dev.routeplanner.route.LatLon
 import dev.routeplanner.route.RouteGenerator
 import dev.routeplanner.route.RoutingProblem
+import dev.routeplanner.watch.Delivery
+import dev.routeplanner.watch.DeliveryProblem
+import dev.routeplanner.watch.FakeWatch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -28,7 +31,13 @@ class RequestViewModelTest {
 
     private val engine = FakeRoutingEngine.answering { radiusM, _ -> radiusM * 57 / 10 }
 
-    private fun viewModel(engine: FakeRoutingEngine = this.engine) = RequestViewModel(RouteGenerator(engine))
+    private val watch = FakeWatch()
+
+    /** Seconds on the phone's clock, which number the sends. */
+    private var clockSeconds = 1_760_000_000
+
+    private fun viewModel(engine: FakeRoutingEngine = this.engine) =
+        RequestViewModel(RouteGenerator(engine), Delivery(watch), sequenceNumber = { clockSeconds })
 
     private val RequestViewModel.targetMetres get() = state.value.targetDistance.metres
 
@@ -134,5 +143,52 @@ class RequestViewModelTest {
         vm.longer()
 
         assertEquals(RouteState.None, vm.state.value.routeState)
+    }
+
+    @Test
+    fun `Run this one puts the shown route on the watch and confirms once the watch has it`() {
+        val vm = viewModel()
+        vm.onLocation(HOME)
+        vm.findRoutes()
+        val route = (vm.state.value.routeState as RouteState.Shown).route
+        watch.holdAcks()
+
+        vm.runThisOne()
+        assertEquals(SendState.Sending, vm.state.value.sendState)
+
+        watch.releaseAcks()
+        val onWatch = vm.state.value.sendState as SendState.OnWatch
+        assertEquals(route.points.first().lat, watch.courses.single().points.first().latE6 / 1e6, 1e-6)
+        assertEquals(watch.courses.single().totalM, onWatch.totalM)
+    }
+
+    @Test
+    fun `a failed send shows the problem, and Retry sends again with a new sequence number`() {
+        val vm = viewModel()
+        vm.onLocation(HOME)
+        vm.findRoutes()
+        watch.connected = false
+
+        vm.runThisOne()
+        assertEquals(SendState.Failed(DeliveryProblem.NotConnected), vm.state.value.sendState)
+
+        watch.connected = true
+        clockSeconds += 5
+        vm.runThisOne()
+        assertTrue(vm.state.value.sendState is SendState.OnWatch)
+        assertEquals(1_760_000_005, watch.courses.single().sequence)
+    }
+
+    @Test
+    fun `closing the confirmation goes back to the route`() {
+        val vm = viewModel()
+        vm.onLocation(HOME)
+        vm.findRoutes()
+        vm.runThisOne()
+
+        vm.closeConfirmation()
+
+        assertEquals(SendState.None, vm.state.value.sendState)
+        assertTrue(vm.state.value.routeState is RouteState.Shown)
     }
 }

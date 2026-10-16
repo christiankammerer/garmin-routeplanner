@@ -16,10 +16,16 @@ import dev.routeplanner.route.BRouterEngine
 import dev.routeplanner.route.RouteGenerator
 import dev.routeplanner.ui.RequestScreen
 import dev.routeplanner.ui.RequestViewModel
+import dev.routeplanner.watch.ConnectIqWatchLink
+import dev.routeplanner.watch.Delivery
 
 class MainActivity : ComponentActivity() {
     private val requestViewModel: RequestViewModel by viewModels {
-        viewModelFactory { initializer { RequestViewModel(RouteGenerator(BRouterEngine(application))) } }
+        viewModelFactory {
+            initializer {
+                RequestViewModel(RouteGenerator(BRouterEngine(application)), Delivery(ConnectIqWatchLink(application)))
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
