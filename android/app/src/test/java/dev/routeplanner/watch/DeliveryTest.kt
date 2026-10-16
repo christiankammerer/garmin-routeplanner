@@ -2,12 +2,14 @@ package dev.routeplanner.watch
 
 import dev.routeplanner.course.buildCourse
 import dev.routeplanner.course.loadRoute
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class DeliveryTest {
     private val course = buildCourse(loadRoute("stockholm-10k-loop.txt"), sequence = 1_760_000_000)
     private val watch = FakeWatch()
@@ -63,5 +65,12 @@ class DeliveryTest {
 
         watch.acknowledge = { WatchMessage.Ack("0badc0de", it.sequence, AckOutcome.Stored) }
         assertEquals(DeliveryOutcome.Failed(DeliveryProblem.NoAcknowledgement), delivery.deliver(course))
+    }
+
+    @Test
+    fun `tells when the watch refuses the course because it is recording a run`() = runTest {
+        watch.acknowledge = { WatchMessage.Ack(it.id, it.sequence, AckOutcome.Busy) }
+
+        assertEquals(DeliveryOutcome.Failed(DeliveryProblem.WatchRecording), delivery.deliver(course))
     }
 }

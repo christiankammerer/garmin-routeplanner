@@ -26,6 +26,11 @@ class Course {
         return points[i * 3 + 1];
     }
 
+    // Metres along the course from its start to point i.
+    function cumM(i as Number) as Number {
+        return points[i * 3 + 2];
+    }
+
     // Reads a course message, or a course as stored; null when it isn't a whole, well-formed course.
     static function fromDictionary(data as Dictionary) as Course? {
         var id = data["id"];

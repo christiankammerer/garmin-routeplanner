@@ -68,6 +68,10 @@ class ProtocolTest {
             WatchMessage.Ack(id = "8a1f03c2", sequence = 7, outcome = AckOutcome.Stored),
             watchMessageFromWire(mapOf("t" to "ack", "id" to "8a1f03c2", "seq" to 7, "outcome" to "stored")),
         )
+        assertEquals(
+            WatchMessage.Ack(id = "8a1f03c2", sequence = 7, outcome = AckOutcome.Busy),
+            watchMessageFromWire(mapOf("t" to "ack", "id" to "8a1f03c2", "seq" to 7, "outcome" to "busy")),
+        )
     }
 
     @Test
