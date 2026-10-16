@@ -8,18 +8,23 @@ import Toybox.Test;
 const ORIGIN_LAT_E6 = 59329300;
 const ORIGIN_LON_E6 = 18068600;
 
-// A course through [x, y] corners in metres, with its cumulative metres measured along them.
+// A course through [x, y] corners in metres, with a point every 20 m as a real course has,
+// and its cumulative metres measured along them.
 function courseThrough(corners as Array<[Float, Float]>) as Course {
-    var points = [] as Array<Number>;
+    var start = fixAt(corners[0][0], corners[0][1]);
+    var points = [start[0], start[1], 0] as Array<Number>;
     var cum = 0.0;
-    for (var i = 0; i < corners.size(); i++) {
-        if (i > 0) {
-            var dx = corners[i][0] - corners[i - 1][0];
-            var dy = corners[i][1] - corners[i - 1][1];
-            cum += Math.sqrt(dx * dx + dy * dy);
+    for (var i = 1; i < corners.size(); i++) {
+        var dx = corners[i][0] - corners[i - 1][0];
+        var dy = corners[i][1] - corners[i - 1][1];
+        var length = Math.sqrt(dx * dx + dy * dy);
+        var steps = Math.ceil(length / 20).toNumber();
+        for (var k = 1; k <= steps; k++) {
+            var f = k.toFloat() / steps;
+            var fix = fixAt(corners[i - 1][0] + dx * f, corners[i - 1][1] + dy * f);
+            points.addAll([fix[0], fix[1], Math.round(cum + length * f).toNumber()]);
         }
-        var fix = fixAt(corners[i][0], corners[i][1]);
-        points.addAll([fix[0], fix[1], Math.round(cum).toNumber()]);
+        cum += length;
     }
     return new Course("test", 1, points[points.size() - 1], points);
 }
@@ -129,5 +134,37 @@ function gpsNoiseNeitherJumpsNorRunsBackwards(logger as Logger) as Boolean {
         assertNear(2000 - along, remaining, 20, "at " + along + " m");
         last = remaining;
     }
+    return true;
+}
+
+(:test)
+function catchesUpAfterAGpsGap(logger as Logger) as Boolean {
+    var tracker = new CourseTracker(courseThrough([[0.0, 0.0], [1000.0, 0.0], [1000.0, 1000.0]]));
+    for (var x = 0.0; x <= 200.0; x += 10.0) {
+        runTo(tracker, x, 0.0);
+    }
+
+    // No fixes for 500 m, then the runner is 700 m along: beyond the window ahead of the last match.
+    for (var x = 700.0; x <= 800.0; x += 10.0) {
+        runTo(tracker, x, 0.0);
+    }
+
+    assertNear(1200, tracker.distanceRemainingM(), 2, "caught up 800 m along");
+    return true;
+}
+
+(:test)
+function catchingUpOnAnOutAndBackPicksTheWayOut(logger as Logger) as Boolean {
+    var tracker = new CourseTracker(courseThrough([[0.0, 0.0], [1000.0, 0.0], [0.0, 0.0]]));
+    for (var x = 0.0; x <= 100.0; x += 10.0) {
+        runTo(tracker, x, 0.0);
+    }
+
+    // A gap on the way out: 600 m east lies on both the way out and the way back.
+    for (var x = 600.0; x <= 700.0; x += 10.0) {
+        runTo(tracker, x, 0.0);
+    }
+
+    assertNear(1300, tracker.distanceRemainingM(), 2, "700 m out, not on the way back");
     return true;
 }

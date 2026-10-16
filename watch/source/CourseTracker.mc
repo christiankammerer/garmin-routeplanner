@@ -11,6 +11,8 @@ class CourseTracker {
     private const MATCH_M = 50;
     // A first fix further than this from the course start gets a "Not at start" warning.
     private const NOT_AT_START_M = 100;
+    // After this many fixes in a row with no match ahead (a GPS gap, a cut corner), look further.
+    private const LOST_FIXES = 5;
 
     private var _course as Course;
     private var _plane as CoursePlane;
@@ -19,6 +21,7 @@ class CourseTracker {
     private var _alongM as Float = 0.0;
     private var _segment as Number = 0;
     private var _started as Boolean = false;
+    private var _unmatched as Number = 0;
 
     function initialize(course as Course) {
         _course = course;
@@ -48,11 +51,45 @@ class CourseTracker {
             last++;
         }
         var match = closestMatch(x, y, _segment, last);
-        if ((match[0] as Float) <= MATCH_M && (match[2] as Float) > _alongM) {
+        if ((match[0] as Float) <= MATCH_M) {
+            _unmatched = 0;
+            moveTo(match);
+        } else {
+            _unmatched += 1;
+            var caughtUp = _unmatched >= LOST_FIXES ? firstPassAhead(x, y) : null;
+            if (caughtUp != null) {
+                _unmatched = 0;
+                moveTo(caughtUp);
+            }
+        }
+        return [];
+    }
+
+    // Moves progress to [match], forward only.
+    private function moveTo(match as Array) as Void {
+        if ((match[2] as Float) > _alongM) {
             _segment = match[1] as Number;
             _alongM = match[2] as Float;
         }
-        return [];
+    }
+
+    // Where the runner is, searching the rest of the course: the closest point on the first stretch
+    // that passes within reach. The first pass, not the closest, so an out-and-back section's way
+    // back can't win over its way out. Null when no part of the rest of the course is within reach.
+    private function firstPassAhead(x as Float, y as Float) as Array? {
+        var n = _xs.size();
+        var first = _segment;
+        while (first < n - 1 && (closestMatch(x, y, first, first + 1)[0] as Float) > MATCH_M) {
+            first++;
+        }
+        if (first >= n - 1) {
+            return null;
+        }
+        var end = first + 1;
+        while (end < n - 1 && (closestMatch(x, y, end, end + 1)[0] as Float) <= MATCH_M) {
+            end++;
+        }
+        return closestMatch(x, y, first, end);
     }
 
     // How far the runner still has to go along the course to its end.

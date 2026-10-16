@@ -1,6 +1,5 @@
 import Toybox.Activity;
 import Toybox.ActivityRecording;
-import Toybox.Attention;
 import Toybox.Lang;
 import Toybox.Position;
 import Toybox.Sensor;
@@ -71,8 +70,8 @@ class RunSession {
         if (state != RECORDING || position == null || info.accuracy < Position.QUALITY_USABLE) {
             return;
         }
-        var degrees = position.toDegrees();
-        var events = tracker.addFix((degrees[0] * 1e6).toNumber(), (degrees[1] * 1e6).toNumber());
+        var e6 = toE6(position);
+        var events = tracker.addFix(e6[0], e6[1]);
         if (events.indexOf(:notAtStart) >= 0) {
             _notAtStartUntil = System.getTimer() + NOT_AT_START_SHOWN_MS;
             buzz(500);
@@ -106,9 +105,25 @@ class RunSession {
         return fix.heading;
     }
 
-    private function buzz(ms as Number) as Void {
-        if (Attention has :vibrate) {
-            Attention.vibrate([new Attention.VibeProfile(75, ms)]);
-        }
+    // A fresh session on the same course for the next run, keeping the GPS fix it already has.
+    function next(course as Course) as RunSession {
+        var session = new RunSession(course);
+        session.lastFix = lastFix;
+        return session;
+    }
+
+    function distanceRemainingM() as Number {
+        return tracker.distanceRemainingM();
+    }
+
+    function hasUsableFix() as Boolean {
+        var fix = lastFix;
+        return fix != null && fix.accuracy >= Position.QUALITY_USABLE;
+    }
+
+    // The runner's current speed in m/s, from the recording; null before it has one.
+    function speed() as Float? {
+        var info = Activity.getActivityInfo();
+        return info != null ? info.currentSpeed : null;
     }
 }

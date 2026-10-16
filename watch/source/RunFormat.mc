@@ -1,4 +1,3 @@
-import Toybox.Activity;
 import Toybox.Lang;
 
 // How the run's numbers read on screen.
@@ -22,10 +21,5 @@ module RunFormat {
         var s = ms / 1000;
         var clock = (s / 60 % 60).format(s >= 3600 ? "%02d" : "%d") + ":" + (s % 60).format("%02d");
         return s >= 3600 ? (s / 3600) + ":" + clock : clock;
-    }
-
-    function currentSpeed() as Float? {
-        var info = Activity.getActivityInfo();
-        return info != null ? info.currentSpeed : null;
     }
 }

@@ -1,4 +1,11 @@
 import Toybox.Lang;
+import Toybox.Position;
+
+// A GPS position in whole microdegrees, as course points are: [latE6, lonE6].
+function toE6(location as Position.Location) as [Number, Number] {
+    var degrees = location.toDegrees();
+    return [(degrees[0] * 1e6).toNumber(), (degrees[1] * 1e6).toNumber()];
+}
 
 // A course as the phone sends it: whole numbers only. points is flat [latE6, lonE6, cumulative metres, ...].
 class Course {

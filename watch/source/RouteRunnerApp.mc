@@ -9,7 +9,7 @@ import Toybox.WatchUi;
 class RouteRunnerApp extends Application.AppBase {
     var course as Course?;
     var run as RunSession?;
-    // The course page's zoom step; kept here so it survives switching pages.
+    // The course page's zoom step (see CourseView); kept here so it survives switching pages.
     var zoom as Number = 0;
     private var _ticks as Timer.Timer?;
 
@@ -60,9 +60,7 @@ class RouteRunnerApp extends Application.AppBase {
         }
         if (received != null) {
             useCourse(received);
-            if (Attention has :vibrate) {
-                Attention.vibrate([new Attention.VibeProfile(50, 300)]);
-            }
+            buzz(300);
             WatchUi.switchToView(new CourseView(), new RunDelegate(), WatchUi.SLIDE_IMMEDIATE);
         }
     }
@@ -83,9 +81,7 @@ class RouteRunnerApp extends Application.AppBase {
 
     // After a save or discard: the same course, ready for the next run.
     function finishRun() as Void {
-        var next = new RunSession(course as Course);
-        next.lastFix = (run as RunSession).lastFix;
-        run = next;
+        run = (run as RunSession).next(course as Course);
     }
 
     function onPosition(info as Position.Info) as Void {
@@ -102,6 +98,12 @@ class RouteRunnerApp extends Application.AppBase {
             current.onTick();
         }
         WatchUi.requestUpdate();
+    }
+}
+
+function buzz(ms as Number) as Void {
+    if (Attention has :vibrate) {
+        Attention.vibrate([new Attention.VibeProfile(75, ms)]);
     }
 }
 

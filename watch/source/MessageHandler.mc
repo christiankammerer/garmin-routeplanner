@@ -15,7 +15,7 @@ class Reply {
 // Dictionary with its type under "t"; values are whole numbers and short strings only.
 // Pure: it decides, and RouteRunnerApp stores, vibrates and sends.
 module MessageHandler {
-    // While [recording] a run, a course is refused with "busy", so a phone tap can't change the route mid-run.
+    // While [recording] a run, a course is refused with "busy", so a phone tap can't change the course mid-run.
     function handle(data as Object?, recording as Boolean) as Reply {
         if (!(data instanceof Dictionary)) {
             return new Reply(null, null);

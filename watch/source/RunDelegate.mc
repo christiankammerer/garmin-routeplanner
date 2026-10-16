@@ -48,6 +48,7 @@ class RunDelegate extends WatchUi.InputDelegate {
     private function onAction() as Boolean {
         var run = routeRunner().run as RunSession;
         if (run.state == RunSession.READY) {
+            routeRunner().zoom = CourseView.RUN_ZOOM;
             run.start();
         } else if (run.state == RunSession.RECORDING) {
             run.stop();

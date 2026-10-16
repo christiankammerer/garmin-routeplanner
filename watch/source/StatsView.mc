@@ -22,9 +22,9 @@ class StatsView extends WatchUi.View {
         var rows = [
             ["Time", RunFormat.duration(timerMs)],
             ["Distance", RunFormat.km(distanceM)],
-            ["Pace", RunFormat.pace(RunFormat.currentSpeed())],
+            ["Pace", RunFormat.pace(run.speed())],
             ["Heart rate", heartRate != null ? heartRate.toString() : "--"],
-            ["To go", RunFormat.km(run.tracker.distanceRemainingM())]
+            ["Remaining", RunFormat.km(run.distanceRemainingM())]
         ];
         var w = dc.getWidth();
         var h = dc.getHeight();

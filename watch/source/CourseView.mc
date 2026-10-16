@@ -5,10 +5,12 @@ import Toybox.Position;
 import Toybox.WatchUi;
 
 // The course page: the course line with where the runner is. Zoom step 0 fits the whole course,
-// north up; the others follow the runner, heading up while moving. Before the start it shows the
+// north up; the others follow the runner, heading up while moving. A run starts at RUN_ZOOM. Before the start it shows the
 // course's total distance; during the run, distance remaining and pace.
 class CourseView extends WatchUi.View {
     static const ZOOM_STEPS = 4;
+    // The step a run starts at: following the runner, 1 km across.
+    static const RUN_ZOOM = 2;
     // Metres across the line's box at each following zoom step (step 0 fits the course).
     private const ZOOM_WIDTHS_M = [0, 2000, 1000, 500];
 
@@ -47,13 +49,12 @@ class CourseView extends WatchUi.View {
 
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
         if (run.state == RunSession.READY) {
-            var status = run.lastFix != null && (run.lastFix as Position.Info).accuracy >= Position.QUALITY_USABLE
-                ? "Press start" : "Finding GPS…";
+            var status = run.hasUsableFix() ? "Press start" : "Finding GPS…";
             dc.drawText(w / 2, h * 0.13, Graphics.FONT_XTINY, status, CENTRED);
             dc.drawText(w / 2, h * 0.85, Graphics.FONT_MEDIUM, RunFormat.km(course.totalM), CENTRED);
         } else {
-            dc.drawText(w / 2, h * 0.15, Graphics.FONT_MEDIUM, RunFormat.km(run.tracker.distanceRemainingM()), CENTRED);
-            dc.drawText(w / 2, h * 0.85, Graphics.FONT_SMALL, RunFormat.pace(RunFormat.currentSpeed()), CENTRED);
+            dc.drawText(w / 2, h * 0.15, Graphics.FONT_MEDIUM, RunFormat.km(run.distanceRemainingM()), CENTRED);
+            dc.drawText(w / 2, h * 0.85, Graphics.FONT_SMALL, RunFormat.pace(run.speed()), CENTRED);
         }
         if (run.state == RunSession.PAUSED) {
             banner(dc, "Paused", Graphics.COLOR_DK_GRAY);
@@ -68,8 +69,8 @@ class CourseView extends WatchUi.View {
         if (fix == null || fix.position == null) {
             return null;
         }
-        var degrees = (fix.position as Position.Location).toDegrees();
-        return plane.toPlane((degrees[0] * 1e6).toNumber(), (degrees[1] * 1e6).toNumber());
+        var e6 = toE6(fix.position as Position.Location);
+        return plane.toPlane(e6[0], e6[1]);
     }
 
     // [centre x, centre y, metres to pixels, rotation in radians].
