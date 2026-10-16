@@ -9,3 +9,6 @@ developer_key.*
 watch/bin/
 *.prg
 *.prg.debug.xml
+watch/gen/
+watch/mir/
+watch/internal-mir/
