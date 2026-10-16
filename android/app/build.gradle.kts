@@ -26,6 +26,9 @@ android {
         compose = true
         aidl = true
     }
+
+    // The sample course messages in contract/ are shared with the watch app's unit tests.
+    sourceSets["test"].resources.srcDir("../../contract")
 }
 
 dependencies {
@@ -38,9 +41,12 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.maplibre.compose)
     runtimeOnly(libs.maplibre.compose.runtime.opengl)
+    implementation(libs.connectiq.companion) { artifact { type = "aar" } }
 
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
+    // Reads the sample course messages; android.jar's org.json is only a stub in unit tests.
+    testImplementation(libs.serialization.json)
 
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)

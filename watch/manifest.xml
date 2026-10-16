@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
+    <!-- The id must match WATCH_APP_ID in the Android app (ConnectIqWatchLink.kt). -->
+    <iq:application id="5eb1b417be064f7a8f031ce160e9b8ab" type="watch-app" name="@Strings.AppName" entry="RouteRunnerApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="5.0.0">
+        <iq:products>
+            <iq:product id="vivoactive5"/>
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="Communications"/>
+        </iq:permissions>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+        <iq:barrels/>
+    </iq:application>
+</iq:manifest>
