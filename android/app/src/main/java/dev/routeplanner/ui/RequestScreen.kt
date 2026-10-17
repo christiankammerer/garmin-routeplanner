@@ -283,6 +283,7 @@ private fun SendStatus(sendState: SendState, onRetry: () -> Unit) {
                     "Your watch isn't connected. Check that it is nearby and connected in Garmin Connect."
                 DeliveryProblem.AppNotOpen -> "Open $WATCH_APP_NAME on your watch, then try again."
                 DeliveryProblem.SendFailed, DeliveryProblem.NoAcknowledgement -> "Couldn't send to watch."
+                DeliveryProblem.WatchRecording -> "Your watch is recording a run. Finish it first."
             },
             action = "Retry" to onRetry,
         )

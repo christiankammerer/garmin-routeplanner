@@ -26,6 +26,9 @@ sealed interface WatchMessage {
 enum class AckOutcome(val wire: String) {
     /** The watch now holds the course. */
     Stored("stored"),
+
+    /** The watch is recording a run, so it kept the course it had. */
+    Busy("busy"),
 }
 
 fun PhoneMessage.toWire(): Map<String, Any> = when (this) {
